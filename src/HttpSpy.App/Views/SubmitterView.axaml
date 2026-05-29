@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
+             x:Class="HttpSpy.App.Views.SubmitterView"
+             x:DataType="vm:SubmitterViewModel">
+
+    <Grid RowDefinitions="Auto,*,4,*" Margin="8">
+        <!-- request line -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <ComboBox ItemsSource="{Binding Methods}" SelectedItem="{Binding Method}" MinWidth="110"/>
+            <TextBox Text="{Binding Url}" Width="640" Watermark="https://example.com/api"/>
+            <Button Content="Send" Command="{Binding SendCommand}" IsEnabled="{Binding !IsSending}" MinWidth="80"/>
+            <TextBlock Text="{Binding ResponseStatus}" VerticalAlignment="Center" FontWeight="Bold"/>
+            <TextBlock Text="{Binding Elapsed}" VerticalAlignment="Center" Foreground="#FFB0C4DE"/>
+        </StackPanel>
+
+        <!-- request editor -->
+        <Grid Grid.Row="1" ColumnDefinitions="*,8,*">
+            <DockPanel Grid.Column="0">
+                <TextBlock DockPanel.Dock="Top" Text="Request headers" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding HeadersText}" AcceptsReturn="True" TextWrapping="NoWrap"
+                         FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+            </DockPanel>
+            <DockPanel Grid.Column="2">
+                <TextBlock DockPanel.Dock="Top" Text="Request body" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding BodyText}" AcceptsReturn="True" TextWrapping="NoWrap"
+                         FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+            </DockPanel>
+        </Grid>
+
+        <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch" Background="#33FFFFFF"/>
+
+        <!-- response -->
+        <Grid Grid.Row="3" ColumnDefinitions="*,8,2*">
+            <DockPanel Grid.Column="0">
+                <TextBlock DockPanel.Dock="Top" Text="Response headers" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding ResponseHeaders, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                         TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+            </DockPanel>
+            <DockPanel Grid.Column="2">
+                <TextBlock DockPanel.Dock="Top" Text="Response body" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBox Text="{Binding ResponseBody, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                         TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+            </DockPanel>
+        </Grid>
+    </Grid>
+</UserControl>

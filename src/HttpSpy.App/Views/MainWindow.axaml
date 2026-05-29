@@ -1,20 +1,225 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:HttpSpy.App.ViewModels"
+        xmlns:conv="using:HttpSpy.App.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="HttpSpy.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Icon="/Assets/avalonia-logo.ico"
-        Title="HttpSpy.App">
+        Width="1280" Height="800"
+        Title="HttpSpy — HTTP/HTTPS Debugger">
 
     <Design.DataContext>
-        <!-- This only sets the DataContext for the previewer in an IDE,
-             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <TextBlock Text="{Binding Greeting}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    <DockPanel>
+        <!-- ===== Menu ===== -->
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="_File">
+                <MenuItem Header="Open session…" Command="{Binding OpenSessionCommand}"/>
+                <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}"/>
+                <Separator/>
+                <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}"/>
+                <MenuItem Header="Export CSV…" Command="{Binding ExportCsvCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Capture">
+                <MenuItem Header="Start" Command="{Binding StartCaptureCommand}"/>
+                <MenuItem Header="Stop" Command="{Binding StopCaptureCommand}"/>
+                <MenuItem Header="Clear" Command="{Binding ClearSessionsCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Session">
+                <MenuItem Header="Resend in Submitter" Command="{Binding ResendToSubmitterCommand}"/>
+                <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}"/>
+                <MenuItem Header="Copy as cURL" Command="{Binding CopyAsCurlCommand}"/>
+                <MenuItem Header="Toggle bookmark" Command="{Binding ToggleBookmarkCommand}"/>
+                <MenuItem Header="Delete" Command="{Binding DeleteSelectedCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_HTTPS">
+                <MenuItem Header="Install / trust root certificate" Command="{Binding InstallCertificateCommand}"/>
+            </MenuItem>
+        </Menu>
 
+        <!-- ===== Toolbar ===== -->
+        <Border DockPanel.Dock="Top" Background="#22000000" Padding="6">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Command="{Binding ToggleCaptureCommand}" MinWidth="110">
+                    <TextBlock>
+                        <TextBlock.Text>
+                            <Binding Path="IsCapturing">
+                                <Binding.Converter>
+                                    <conv:BoolToTextConverter TrueText="■ Stop capture" FalseText="● Start capture"/>
+                                </Binding.Converter>
+                            </Binding>
+                        </TextBlock.Text>
+                    </TextBlock>
+                </Button>
+                <Button Content="Clear" Command="{Binding ClearSessionsCommand}"/>
+                <Button Content="Save" Command="{Binding SaveSessionCommand}"/>
+                <Button Content="Open" Command="{Binding OpenSessionCommand}"/>
+                <Button Content="Export HAR" Command="{Binding ExportHarCommand}"/>
+                <Separator Width="1" Background="#44FFFFFF" Margin="4,2"/>
+                <TextBlock Text="Port:" VerticalAlignment="Center"/>
+                <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"
+                               FormatString="0" Width="110" Increment="1"/>
+                <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}"/>
+                <CheckBox Content="System proxy" IsChecked="{Binding SetSystemProxy}"/>
+                <Button Content="Trust cert" Command="{Binding InstallCertificateCommand}"/>
+                <TextBlock Text="{Binding CertStatus}" VerticalAlignment="Center" Foreground="#FFB0C4DE"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ===== Status bar ===== -->
+        <Border DockPanel.Dock="Bottom" Background="#22000000" Padding="8,4">
+            <TextBlock Text="{Binding StatusText}" FontFamily="Cascadia Mono,Consolas,monospace"/>
+        </Border>
+
+        <!-- ===== Main tabs ===== -->
+        <TabControl SelectedIndex="{Binding ActiveTabIndex}">
+
+            <!-- ========== CAPTURE ========== -->
+            <TabItem Header="Capture">
+                <Grid RowDefinitions="Auto,*">
+                    <!-- Filter bar -->
+                    <Border Grid.Row="0" Padding="6" Background="#11FFFFFF">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="Filter:" VerticalAlignment="Center"/>
+                            <TextBox Text="{Binding FilterText}" Watermark="url / host / method / status / process"
+                                     Width="360"/>
+                            <ComboBox ItemsSource="{Binding MethodFilters}" SelectedItem="{Binding MethodFilter}"
+                                      Width="110"/>
+                            <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnly}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Breakpoint banner -->
+                    <Grid Grid.Row="1" RowDefinitions="Auto,*,4,*">
+                        <Border Grid.Row="0" Background="#553311" Padding="8"
+                                IsVisible="{Binding CurrentBreakpoint, Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <TextBlock Text="⏸" FontSize="16"/>
+                                    <TextBlock Text="{Binding CurrentBreakpoint.PhaseLabel}" FontWeight="Bold"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding CurrentBreakpoint.StatusLine}" VerticalAlignment="Center"/>
+                                    <Button Content="Continue" Command="{Binding ContinueBreakpointCommand}"/>
+                                    <Button Content="Abort" Command="{Binding AbortBreakpointCommand}"/>
+                                </StackPanel>
+                                <TextBox Text="{Binding CurrentBreakpoint.HeadersText}" AcceptsReturn="True"
+                                         Height="80" FontFamily="Cascadia Mono,Consolas,monospace" Margin="0,4,0,0"/>
+                                <TextBox Text="{Binding CurrentBreakpoint.BodyText}" AcceptsReturn="True"
+                                         Height="80" FontFamily="Cascadia Mono,Consolas,monospace" Margin="0,4,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Session grid -->
+                        <DataGrid Grid.Row="1" x:Name="SessionGrid"
+                                  ItemsSource="{Binding Sessions}"
+                                  SelectedItem="{Binding SelectedSession}"
+                                  IsReadOnly="True" CanUserResizeColumns="True"
+                                  GridLinesVisibility="Horizontal" SelectionMode="Single"
+                                  FontSize="12">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="55"/>
+                                <DataGridTextColumn Header="Proto" Binding="{Binding SchemeGlyph}" Width="60"/>
+                                <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="75"/>
+                                <DataGridTextColumn Header="Result" Binding="{Binding StatusDisplay}" Width="90"/>
+                                <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="190"/>
+                                <DataGridTextColumn Header="URL" Binding="{Binding PathAndQuery}" Width="*"/>
+                                <DataGridTextColumn Header="Type" Binding="{Binding ContentType}" Width="130"/>
+                                <DataGridTextColumn Header="Size" Binding="{Binding Size, Converter={StaticResource ByteSize}}" Width="80"/>
+                                <DataGridTextColumn Header="Time" Binding="{Binding DurationMs, StringFormat='{}{0:F0} ms'}" Width="80"/>
+                                <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="120"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch" Background="#33FFFFFF"/>
+
+                        <!-- Inspector -->
+                        <Border Grid.Row="3" BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0">
+                            <ContentControl Content="{Binding Inspector}"/>
+                        </Border>
+                    </Grid>
+                </Grid>
+            </TabItem>
+
+            <!-- ========== DASHBOARD ========== -->
+            <TabItem Header="Dashboard">
+                <ContentControl Content="{Binding Dashboard}"/>
+            </TabItem>
+
+            <!-- ========== SUBMITTER ========== -->
+            <TabItem Header="Submitter">
+                <ContentControl Content="{Binding Submitter}"/>
+            </TabItem>
+
+            <!-- ========== RULES ========== -->
+            <TabItem Header="Rules &amp; Breakpoints">
+                <Grid ColumnDefinitions="320,4,*" Margin="6">
+                    <DockPanel Grid.Column="0">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                            <Button Content="Add" Command="{Binding AddRuleCommand}"/>
+                            <Button Content="Remove" Command="{Binding RemoveRuleCommand}"/>
+                            <Button Content="Apply" Command="{Binding ApplyRulesCommand}"/>
+                        </StackPanel>
+                        <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding Summary}"/>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </DockPanel>
+
+                    <GridSplitter Grid.Column="1" Width="4" Background="#33FFFFFF"/>
+
+                    <ScrollViewer Grid.Column="2" Margin="8,0,0,0">
+                        <StackPanel Spacing="8" DataContext="{Binding SelectedRule}"
+                                    IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
+                            <TextBlock Text="Rule editor" FontWeight="Bold" FontSize="15"/>
+                            <CheckBox Content="Enabled" IsChecked="{Binding Enabled}"/>
+                            <TextBlock Text="Name"/>
+                            <TextBox Text="{Binding Name}"/>
+                            <TextBlock Text="Action"/>
+                            <ComboBox ItemsSource="{Binding Actions}" SelectedIndex="{Binding ActionIndex}" HorizontalAlignment="Left" MinWidth="200"/>
+                            <TextBlock Text="URL match mode"/>
+                            <ComboBox ItemsSource="{Binding MatchModes}" SelectedIndex="{Binding MatchModeIndex}" HorizontalAlignment="Left" MinWidth="200"/>
+                            <TextBlock Text="URL pattern"/>
+                            <TextBox Text="{Binding UrlPattern}"/>
+                            <TextBlock Text="Method filter (optional)"/>
+                            <TextBox Text="{Binding MethodFilter}"/>
+                            <TextBlock Text="Redirect URL (Redirect action)"/>
+                            <TextBox Text="{Binding RedirectUrl}"/>
+                            <TextBlock Text="Auto-Reply status / content-type / body"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <NumericUpDown Value="{Binding AutoReplyStatus}" Minimum="100" Maximum="599" FormatString="0" Width="120"/>
+                                <TextBox Text="{Binding AutoReplyContentType}" Width="200"/>
+                            </StackPanel>
+                            <TextBox Text="{Binding AutoReplyBody}" AcceptsReturn="True" Height="100"
+                                     FontFamily="Cascadia Mono,Consolas,monospace"/>
+                            <TextBlock Text="Delay (ms, Delay action)"/>
+                            <NumericUpDown Value="{Binding DelayMs}" Minimum="0" Maximum="60000" FormatString="0" Width="160" HorizontalAlignment="Left"/>
+                            <TextBlock Text="{Binding HitCount, StringFormat='Hits: {0}'}" Foreground="#FFB0C4DE"/>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+            </TabItem>
+
+            <!-- ========== LOG ========== -->
+            <TabItem Header="Log">
+                <Border Padding="6">
+                    <ScrollViewer>
+                        <ItemsControl ItemsSource="{Binding LogLines}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
 </Window>
