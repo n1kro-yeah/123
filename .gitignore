@@ -1,0 +1,20 @@
+## .NET / build output
+bin/
+obj/
+out/
+publish/
+*.user
+*.suo
+.vs/
+.idea/
+*.DotSettings.user
+
+## Rider / VS Code
+.vscode/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## HttpSpy local data
+*.hspy.local
