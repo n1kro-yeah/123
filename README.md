@@ -22,18 +22,108 @@ and can be developed and demoed on Linux/macOS.
 - **Inspectors:** request/response headers, query string, cookies, form fields,
   body (with JSON/XML pretty-printing), raw view, hex dump, image preview, and
   per-phase timings.
-- **Protocols:** HTTP/1.1 (full), WebSocket frame capture (RFC 6455),
-  Server-Sent Events (text/event-stream). HTTPS via MITM.
+- **Protocols:** HTTP/1.1 (full), **HTTP/2** (ALPN `h2`, full HPACK + frame
+  layer, stream multiplexing, flow control), **gRPC** decoding (length-prefixed
+  protobuf), WebSocket frame capture (RFC 6455), Server-Sent Events
+  (text/event-stream). HTTPS via MITM.
 - **Submitter** (request builder): compose any request or clone a captured one,
   edit method/URL/headers/body, and resend.
 - **Rules engine:** Block, Redirect, Auto-Reply (mock responses), Breakpoints
-  (pause + edit request/response live), Modify request/response, Delay, and
-  Highlight — matched by Contains / Wildcard / Regex / Exact.
+  (pause + edit request/response live), Modify request/response, Delay,
+  Highlight, and **Map Local** (serve a local file as the response, with
+  automatic MIME-type detection) — matched by Contains / Wildcard / Regex / Exact.
+- **Network simulation (throttling):** rate-limit downstream bandwidth (kbps)
+  and inject extra latency (ms) to emulate slow links, with one-click presets
+  (GPRS / 2G / 3G / DSL / Wi-Fi) in the Options dialog.
 - **Dashboard:** status-code distribution, top hosts, content types and method
   breakdown, plus totals (requests, bytes, average time, errors, HTTPS count).
 - **Code generation** from any session: cURL, C#, Python, JavaScript.
 - **Export / persistence:** HAR 1.2, CSV (Excel), and a compressed `.hspy`
   session file (save/restore full captures including bodies).
+
+### Pro-level workflow features
+
+- **Sortable, filterable session grid** — click any column header to sort;
+  filter by URL / host / method / status / process, "errors only", or
+  full-text **search inside request/response bodies**.
+- **JSON tree viewer** — responses detected as JSON get a collapsible,
+  type-annotated tree alongside the pretty-printed body.
+- **Timing waterfall** — per-transaction Connect / Send / Wait / Receive phase
+  bars with a millisecond breakdown.
+- **Find bar** — incremental "find next" search (with match count) inside the
+  response body.
+- **Session compare** — pick a baseline, then compare any other session against
+  it in a side-by-side line diff (removed lines tinted red, added green).
+- **Context menu** on the grid: resend in Submitter, copy URL / cURL, copy or
+  save the response body, bookmark, mark/compare, delete.
+- **Auto-scroll** to follow live capture, **dark / light theme toggle**, and an
+  **upstream proxy + TLS-passthrough host** configuration.
+- **Persistent settings & rules** — all options, the theme and the rule list are
+  saved to `%APPDATA%\HttpSpy\` (`settings.json` + `rules.json`) and restored on
+  the next launch.
+
+### HTTP Debugger-parity features
+
+- **Regex HTTP Modifier** — per-rule find/replace over request/response headers
+  *and* bodies, with capture-group substitution (`$1`, `$2`), escape sequences
+  (`\r \n \t`), and automatic `Content-Length` recalculation. Multiple modifier
+  steps can be chained on a single rule.
+- **Endpoint redirect (TCP/IP Redirector)** — transparently remap a matched
+  request to a different `host:port`, with an optional `Host:` header rewrite,
+  while the client URL stays unchanged.
+- **Highlighting engine** — colour grid rows by *column + operator* rules
+  (Contains / IsSame / StartsWith / EndsWith / IsEqual / IsLess / IsBigger /
+  IsBetween over URL, host, method, status, content-type, process, sizes,
+  duration, speed) or by regex match on any header.
+- **Conditional bookmarks** — auto-bookmark sessions whose headers match a regex,
+  with optional comment, and a "⮕ Bookmark" navigation button.
+- **Advanced global search** — search across URL, request/response headers and
+  bodies of *all* sessions with Find / Find Next and wrap-around.
+- **Display filters dialog** — stack multiple show-only / hide rules over
+  URL / Host / Method / Status / ContentType / Process / AnyHeader / Body
+  (substring or regex); filters persist to `settings.json`.
+- **Summary pane** — consolidated overview per session: sizes, duration,
+  transfer speed and compression ratio (decoded vs. on-the-wire bytes).
+- **Charts** — *Top processes* bar chart and a *requests-over-time* histogram
+  (12 buckets) on the Dashboard.
+- **Grouping / tree mode** — group the grid by Host / Process / Method / Status /
+  ContentType into collapsible groups.
+- **Converter tool** — URL, Base64, Hex encode/decode and JSON prettify/minify,
+  with a one-click "move result to input" for chaining (Tools → Converter).
+- **Export formats** — HAR 1.2, CSV, **JSON**, **XML**, **TXT**, and
+  **save each session to a separate raw file** (File menu).
+
+### HTTP/2 & gRPC
+
+- **HTTP/2 (RFC 7540)** — HttpSpy advertises `h2` over ALPN to clients and
+  re-negotiates `h2` (or HTTP/1.1) to the origin. It implements the full frame
+  layer (DATA, HEADERS, CONTINUATION, SETTINGS, WINDOW_UPDATE, RST_STREAM, PING,
+  GOAWAY), connection/stream **flow control** (§6.9) with automatic DATA frame
+  splitting, and **stream multiplexing** — each h2 stream surfaces as its own
+  session with decrypted headers and body, and all rules (block, redirect,
+  auto-reply, modify, breakpoint, delay) apply per stream.
+- **HPACK (RFC 7541)** — a from-scratch header compression codec: the 61-entry
+  static table, a dynamic table with eviction, integer/string primitives, all
+  three literal representations, and the full 257-symbol **Huffman** encoder /
+  decoder. Validated against the worked examples in RFC 7541 Appendix C.
+- **gRPC** — when a body is `application/grpc*`, HttpSpy splits the
+  length-prefixed messages (1-byte compression flag + 4-byte length) and renders
+  each protobuf payload with a **schema-less wire decoder** (no `.proto`
+  required): field numbers, varint / fixed32 / fixed64 / length-delimited types,
+  recursively-detected nested messages, and UTF-8 string heuristics, shown in a
+  dedicated **gRPC** inspector tab. `gzip` / `deflate` gRPC encodings are
+  inflated automatically.
+
+### Transparent capture (experimental, Windows-only)
+
+- **Driverless-proxy capture via WinDivert** — an optional mode (Options →
+  *Transparent capture without system proxy*) that uses the signed
+  [WinDivert](https://reqrypt.org/windivert.html) driver to divert outbound
+  TCP:80/443 to a local listener, recovering the target host from the TLS SNI or
+  HTTP `Host` header — so traffic is captured **without** changing the Windows
+  system proxy (the HTTP Debugger "no proxy configuration" analog). Requires
+  running as Administrator with `WinDivert.dll` + `WinDivert64.sys` alongside the
+  executable. This path is experimental and is disabled by default.
 
 ## Project layout
 
@@ -41,7 +131,12 @@ and can be developed and demoed on Linux/macOS.
 HttpSpy.sln
 src/
   HttpSpy.Core/    # capture engine, models, rules, exporters (no UI, net8.0 library)
+    Proxy/Http2/       # HTTP/2 frame layer, HPACK (+ Huffman), h2 connection/origin client
+    Proxy/Grpc/        # gRPC framing + schema-less protobuf wire decoder
+    Proxy/Transparent/ # WinDivert interop + redirector, TLS SNI parser (transparent capture)
   HttpSpy.App/     # Avalonia desktop UI (WinExe, net8.0)
+tests/
+  HttpSpy.Tests/   # xUnit tests (HPACK RFC 7541 vectors, protobuf/gRPC, SNI) — 27 tests
 ```
 
 `HttpSpy.Core` has no UI dependency and can be referenced from tests or other
@@ -100,7 +195,9 @@ trust the HttpSpy root CA, which is why the **Trust cert** step is required.
 > HTTP Debugger's "no proxy configuration" capture relies on a signed
 > kernel-mode WFP driver, which cannot be reproduced in managed code. HttpSpy
 > achieves the same end result (decrypted HTTPS, full inspection, modification
-> and replay) with a user-mode MITM proxy and automatic system-proxy setup.
+> and replay) with a user-mode MITM proxy and automatic system-proxy setup, plus
+> an optional **WinDivert**-based transparent mode (see above) that captures
+> without any system-proxy change using WinDivert's own signed driver.
 
 ## Listening address
 

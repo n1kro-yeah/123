@@ -73,6 +73,40 @@
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
+
+            <TextBlock Text="Top processes" Classes="section"/>
+            <ItemsControl ItemsSource="{Binding TopProcesses}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="220,*,60" Margin="0,2">
+                            <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <Rectangle Grid.Column="1" Height="18" HorizontalAlignment="Left"
+                                       Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Requests over time" Classes="section"/>
+            <ItemsControl ItemsSource="{Binding TimeChart}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="4"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <StackPanel VerticalAlignment="Bottom" Width="48">
+                            <TextBlock Text="{Binding Value}" HorizontalAlignment="Center" FontSize="11"/>
+                            <Rectangle Width="34" Height="{Binding BarWidth}" HorizontalAlignment="Center"
+                                       Fill="{Binding Brush}" RadiusX="2" RadiusY="2"/>
+                            <TextBlock Text="{Binding Label}" HorizontalAlignment="Center" FontSize="10"
+                                       Foreground="#FFB0C4DE"/>
+                        </StackPanel>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
         </StackPanel>
     </ScrollViewer>
 

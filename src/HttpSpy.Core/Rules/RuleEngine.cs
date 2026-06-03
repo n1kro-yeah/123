@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using HttpSpy.Core.Models;
 
@@ -13,6 +14,14 @@ public sealed class RequestDecision
 
     /// <summary>When set, short-circuit the request and return this canned response.</summary>
     public AutoReply? AutoReply { get; set; }
+
+    // ---- Endpoint redirect (TCP/IP Redirector analog) ------------------------
+    /// <summary>When set, connect to this host instead of the original one.</summary>
+    public string? ConnectHost { get; set; }
+    /// <summary>When &gt; 0, connect to this port instead of the original one.</summary>
+    public int ConnectPort { get; set; }
+    /// <summary>Whether the Host header should be rewritten to the redirected endpoint.</summary>
+    public bool RewriteHost { get; set; }
 }
 
 /// <summary>A canned response produced by an Auto-Reply rule.</summary>
@@ -81,10 +90,52 @@ public sealed class RuleEngine
                         Body = Encoding.UTF8.GetBytes(rule.AutoReplyBody)
                     };
                     return decision;
+                case RuleAction.MapLocal:
+                    if (!string.IsNullOrEmpty(rule.MapLocalPath) && File.Exists(rule.MapLocalPath))
+                    {
+                        decision.AutoReply = new AutoReply
+                        {
+                            Status = 200,
+                            Reason = "OK",
+                            ContentType = MimeForExtension(Path.GetExtension(rule.MapLocalPath)),
+                            Body = File.ReadAllBytes(rule.MapLocalPath)
+                        };
+                    }
+                    else
+                    {
+                        decision.AutoReply = new AutoReply
+                        {
+                            Status = 404, Reason = "Not Found", ContentType = "text/plain",
+                            Body = Encoding.UTF8.GetBytes($"Map Local file not found: {rule.MapLocalPath}")
+                        };
+                    }
+                    return decision;
+                case RuleAction.RedirectEndpoint:
+                    if (!string.IsNullOrEmpty(rule.RedirectHost))
+                        decision.ConnectHost = rule.RedirectHost;
+                    if (rule.RedirectPort > 0)
+                        decision.ConnectPort = rule.RedirectPort;
+                    decision.RewriteHost = rule.RewriteHostHeader;
+                    break;
+                case RuleAction.Bookmark:
+                    if (rule.HeaderRegexesMatch(HttpModifier.RawHeaderBlock(session.RequestHeaders)))
+                    {
+                        session.Bookmarked = true;
+                        if (!string.IsNullOrEmpty(rule.BookmarkComment))
+                            session.Comment = rule.BookmarkComment;
+                    }
+                    break;
                 case RuleAction.ModifyRequest:
+                    if (!rule.HeaderRegexesMatch(HttpModifier.RawHeaderBlock(session.RequestHeaders)))
+                        break;
                     ApplyHeaderEdits(session.RequestHeaders, rule.HeaderEdits);
+                    HttpModifier.Apply(rule, session, responsePhase: false);
                     if (rule.ReplacementBody is not null)
+                    {
                         session.RequestBody = Encoding.UTF8.GetBytes(rule.ReplacementBody);
+                        if (!IsChunked(session.RequestHeaders))
+                            session.RequestHeaders.Set("Content-Length", session.RequestBody.Length.ToString());
+                    }
                     break;
             }
         }
@@ -102,13 +153,29 @@ public sealed class RuleEngine
             switch (rule.Action)
             {
                 case RuleAction.ModifyResponse:
+                    if (!rule.HeaderRegexesMatch(HttpModifier.RawHeaderBlock(session.ResponseHeaders)))
+                        break;
                     ApplyHeaderEdits(session.ResponseHeaders, rule.HeaderEdits);
+                    HttpModifier.Apply(rule, session, responsePhase: true);
                     if (rule.ReplacementBody is not null)
+                    {
                         session.ResponseBody = Encoding.UTF8.GetBytes(rule.ReplacementBody);
+                        if (!IsChunked(session.ResponseHeaders))
+                            session.ResponseHeaders.Set("Content-Length", session.ResponseBody.Length.ToString());
+                    }
                     changed = true;
                     break;
                 case RuleAction.Highlight:
-                    session.HighlightColor = rule.HighlightColor;
+                    if (Highlighter.IsMatch(rule, session))
+                        session.HighlightColor = rule.HighlightColor;
+                    break;
+                case RuleAction.Bookmark:
+                    if (rule.HeaderRegexesMatch(HttpModifier.RawHeaderBlock(session.ResponseHeaders)))
+                    {
+                        session.Bookmarked = true;
+                        if (!string.IsNullOrEmpty(rule.BookmarkComment))
+                            session.Comment = rule.BookmarkComment;
+                    }
                     break;
                 case RuleAction.Breakpoint:
                     if (rule.BreakpointPhase is BreakpointPhase.BeforeResponse or BreakpointPhase.Both)
@@ -118,6 +185,31 @@ public sealed class RuleEngine
         }
         return changed;
     }
+
+    private static string MimeForExtension(string ext) => ext.ToLowerInvariant() switch
+    {
+        ".html" or ".htm" => "text/html; charset=utf-8",
+        ".css" => "text/css; charset=utf-8",
+        ".js" or ".mjs" => "application/javascript; charset=utf-8",
+        ".json" => "application/json; charset=utf-8",
+        ".xml" => "application/xml; charset=utf-8",
+        ".txt" => "text/plain; charset=utf-8",
+        ".csv" => "text/csv; charset=utf-8",
+        ".png" => "image/png",
+        ".jpg" or ".jpeg" => "image/jpeg",
+        ".gif" => "image/gif",
+        ".svg" => "image/svg+xml",
+        ".webp" => "image/webp",
+        ".ico" => "image/x-icon",
+        ".woff" => "font/woff",
+        ".woff2" => "font/woff2",
+        ".pdf" => "application/pdf",
+        ".wasm" => "application/wasm",
+        _ => "application/octet-stream"
+    };
+
+    private static bool IsChunked(HeaderCollection headers) =>
+        string.Equals(headers["Transfer-Encoding"], "chunked", StringComparison.OrdinalIgnoreCase);
 
     private static void ApplyHeaderEdits(HeaderCollection headers, List<HeaderEdit> edits)
     {

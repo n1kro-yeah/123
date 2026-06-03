@@ -9,6 +9,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HttpSpy.Core", "src\HttpSpy
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HttpSpy.App", "src\HttpSpy.App\HttpSpy.App.csproj", "{C5D56179-20A1-4728-8C27-45ED1E2A3C40}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{EA1AB152-FEB9-4D8C-A917-2E8B9DF7F804}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HttpSpy.Tests", "tests\HttpSpy.Tests\HttpSpy.Tests.csproj", "{6E4D1912-AD34-418D-BD1B-5AFB704A6E66}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -26,9 +30,14 @@ Global
 		{C5D56179-20A1-4728-8C27-45ED1E2A3C40}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C5D56179-20A1-4728-8C27-45ED1E2A3C40}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C5D56179-20A1-4728-8C27-45ED1E2A3C40}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6E4D1912-AD34-418D-BD1B-5AFB704A6E66}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6E4D1912-AD34-418D-BD1B-5AFB704A6E66}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6E4D1912-AD34-418D-BD1B-5AFB704A6E66}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6E4D1912-AD34-418D-BD1B-5AFB704A6E66}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{A90782F5-ACC3-4173-8D9E-09B496CB7EA8} = {E526C7DF-EF19-4F26-987A-B8C2104D61A5}
 		{C5D56179-20A1-4728-8C27-45ED1E2A3C40} = {E526C7DF-EF19-4F26-987A-B8C2104D61A5}
+		{6E4D1912-AD34-418D-BD1B-5AFB704A6E66} = {EA1AB152-FEB9-4D8C-A917-2E8B9DF7F804}
 	EndGlobalSection
 EndGlobal

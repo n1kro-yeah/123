@@ -69,7 +69,13 @@ public enum RuleAction
     ModifyRequest,
     ModifyResponse,
     Delay,
-    Highlight
+    Highlight,
+    /// <summary>Serve a local file as the response body (Map Local).</summary>
+    MapLocal,
+    /// <summary>Transparently reroute the upstream TCP endpoint (TCP/IP Redirector analog).</summary>
+    RedirectEndpoint,
+    /// <summary>Auto-bookmark matching transactions (Conditional Bookmarks analog).</summary>
+    Bookmark
 }
 
 /// <summary>Which phase of a transaction a breakpoint pauses on.</summary>
@@ -78,4 +84,41 @@ public enum BreakpointPhase
     BeforeRequest,
     BeforeResponse,
     Both
+}
+
+/// <summary>Which part of a transaction a regex HTTP-modifier rule rewrites.</summary>
+public enum ModifierTarget
+{
+    RequestHeaders,
+    RequestBody,
+    ResponseHeaders,
+    ResponseBody
+}
+
+/// <summary>The grid column a Standard highlighting rule is evaluated against.</summary>
+public enum HighlightColumn
+{
+    Url,
+    Host,
+    Method,
+    Status,
+    ContentType,
+    Process,
+    RequestSize,
+    ResponseSize,
+    Duration,
+    Speed
+}
+
+/// <summary>Comparison operator for a Standard highlighting rule.</summary>
+public enum HighlightOperator
+{
+    Contains,
+    IsSame,
+    StartsWith,
+    EndsWith,
+    IsEqual,
+    IsLess,
+    IsBigger,
+    IsBetween
 }

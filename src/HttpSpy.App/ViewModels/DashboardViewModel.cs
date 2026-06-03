@@ -54,6 +54,10 @@ public sealed class DashboardViewModel : ViewModelBase
     public ObservableCollection<ChartItem> TopHosts { get; } = new();
     public ObservableCollection<ChartItem> ContentTypes { get; } = new();
     public ObservableCollection<ChartItem> Methods { get; } = new();
+    public ObservableCollection<ChartItem> TopProcesses { get; } = new();
+
+    /// <summary>Requests per time bucket — the "Time Chart" in HTTP Debugger.</summary>
+    public ObservableCollection<ChartItem> TimeChart { get; } = new();
 
     public void Recompute(IReadOnlyCollection<HttpSession> sessions)
     {
@@ -74,6 +78,39 @@ public sealed class DashboardViewModel : ViewModelBase
             .OrderByDescending(t => t.Item2).Take(8));
         BuildBars(Methods, sessions.GroupBy(s => s.Method)
             .Select(g => (g.Key, (long)g.Count())).OrderByDescending(t => t.Item2));
+        BuildBars(TopProcesses, sessions.Where(s => !string.IsNullOrEmpty(s.ProcessName))
+            .GroupBy(s => s.ProcessName).Select(g => (g.Key, (long)g.Count()))
+            .OrderByDescending(t => t.Item2).Take(8));
+        BuildTimeChart(sessions);
+    }
+
+    /// <summary>Buckets requests into ~12 equal time slices between first and last capture.</summary>
+    private void BuildTimeChart(IReadOnlyCollection<HttpSession> sessions)
+    {
+        TimeChart.Clear();
+        if (sessions.Count == 0) return;
+        var times = sessions.Select(s => s.StartTime).OrderBy(t => t).ToList();
+        var first = times[0];
+        var last = times[^1];
+        double span = (last - first).TotalSeconds;
+        if (span <= 0) { TimeChart.Add(new ChartItem("now", sessions.Count, 1.0, Palette[0])); return; }
+
+        const int buckets = 12;
+        double slice = span / buckets;
+        var counts = new long[buckets];
+        foreach (var t in times)
+        {
+            int idx = (int)((t - first).TotalSeconds / slice);
+            if (idx >= buckets) idx = buckets - 1;
+            if (idx < 0) idx = 0;
+            counts[idx]++;
+        }
+        long max = System.Math.Max(1, counts.Max());
+        for (int i = 0; i < buckets; i++)
+        {
+            string label = $"+{i * slice:F0}s";
+            TimeChart.Add(new ChartItem(label, counts[i], (double)counts[i] / max, Palette[2]));
+        }
     }
 
     private void BuildStatus(IReadOnlyCollection<HttpSession> sessions)

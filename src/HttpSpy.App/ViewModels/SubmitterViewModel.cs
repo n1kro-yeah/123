@@ -26,8 +26,31 @@ public sealed partial class SubmitterViewModel : ViewModelBase
     [ObservableProperty] private bool _isSending;
     [ObservableProperty] private string _elapsed = "";
 
+    /// <summary>cURL command to import into the composer.</summary>
+    [ObservableProperty] private string _curlImport = "";
+
+    /// <summary>Syntax language used to colourise the response body viewer.</summary>
+    [ObservableProperty] private Controls.SyntaxLanguage _responseBodyLanguage = Controls.SyntaxLanguage.None;
+
     /// <summary>Raised when a request is sent so the parent can record it in the grid.</summary>
     public event Action<HttpSession>? RequestSent;
+
+    /// <summary>Parses a pasted <c>curl</c> command and fills the composer fields.</summary>
+    [RelayCommand]
+    private void ImportCurl()
+    {
+        if (string.IsNullOrWhiteSpace(CurlImport)) return;
+        var req = CurlParser.Parse(CurlImport);
+        if (req.Url.Length == 0) { ResponseStatus = "cURL: no URL found"; return; }
+
+        Method = req.Method;
+        Url = req.Url;
+        var sb = new System.Text.StringBuilder();
+        foreach (var (name, value) in req.Headers) sb.Append(name).Append(": ").AppendLine(value);
+        HeadersText = sb.ToString().TrimEnd();
+        BodyText = req.Body;
+        ResponseStatus = $"Imported cURL → {Method} {Url}";
+    }
 
     public void LoadFrom(HttpSession session)
     {
@@ -81,6 +104,12 @@ public sealed partial class SubmitterViewModel : ViewModelBase
                 BodyContentType.Json => BodyFormatter.PrettyJson(body),
                 BodyContentType.Xml or BodyContentType.Html => BodyFormatter.PrettyXml(body),
                 _ => body
+            };
+            ResponseBodyLanguage = session.ResponseBodyKind switch
+            {
+                BodyContentType.Json => Controls.SyntaxLanguage.Json,
+                BodyContentType.Xml or BodyContentType.Html => Controls.SyntaxLanguage.Xml,
+                _ => Controls.SyntaxLanguage.None,
             };
         }
         catch (Exception ex)

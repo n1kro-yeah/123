@@ -6,6 +6,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using HttpSpy.Core.Models;
 using HttpSpy.Core.Rules;
+using HttpSpy.Core.Proxy.Transparent;
 
 namespace HttpSpy.Core.Proxy;
 
@@ -26,6 +27,8 @@ internal sealed class ProxyServer : IDisposable
     private readonly ProxyEngine _engine;
     private readonly Upstream _upstream;
     private TcpListener? _listener;
+    private TcpListener? _transparentListener;
+    private TransparentRedirector? _redirector;
     private CancellationToken _ct;
 
     public ProxyServer(ProxyEngine engine)
@@ -43,6 +46,112 @@ internal sealed class ProxyServer : IDisposable
         _listener = new TcpListener(address, Options.ListenPort);
         _listener.Start();
         _ = AcceptLoopAsync();
+
+        if (Options.TransparentCapture)
+            StartTransparentCapture();
+    }
+
+    /// <summary>
+    /// Brings up the WinDivert redirector and the transparent listener (Windows
+    /// only). Diverted connections arrive here with no CONNECT/absolute-URI, so
+    /// the host is recovered from the TLS SNI or the HTTP Host header and the port
+    /// from the redirector's original-destination table.
+    /// </summary>
+    private void StartTransparentCapture()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            _engine.RaiseLog("Transparent capture is Windows-only (WinDivert); ignoring on this platform.");
+            return;
+        }
+
+        try
+        {
+            _redirector = new TransparentRedirector(Options.TransparentListenPort);
+            _redirector.Start();
+            _transparentListener = new TcpListener(IPAddress.Any, Options.TransparentListenPort);
+            _transparentListener.Start();
+            _ = TransparentAcceptLoopAsync();
+            _engine.RaiseLog($"Transparent capture active (WinDivert) on port {Options.TransparentListenPort}.");
+        }
+        catch (Exception ex)
+        {
+            _engine.RaiseLog($"Transparent capture failed to start: {ex.Message}");
+            _redirector?.Dispose();
+            _redirector = null;
+        }
+    }
+
+    private async Task TransparentAcceptLoopAsync()
+    {
+        while (!_ct.IsCancellationRequested)
+        {
+            TcpClient client;
+            try { client = await _transparentListener!.AcceptTcpClientAsync(_ct).ConfigureAwait(false); }
+            catch (OperationCanceledException) { break; }
+            catch (ObjectDisposedException) { break; }
+            catch (Exception ex) { _engine.RaiseLog($"Transparent accept error: {ex.Message}"); continue; }
+
+            _ = Task.Run(() => HandleTransparentClientAsync(client), _ct);
+        }
+    }
+
+    private async Task HandleTransparentClientAsync(TcpClient client)
+    {
+        Interlocked.Increment(ref _engine.Statistics.ActiveConnections);
+        try
+        {
+            client.NoDelay = true;
+            int srcPort = client.Client.RemoteEndPoint is IPEndPoint rep ? rep.Port : 0;
+
+            // Recover where the application originally intended to connect.
+            int originalPort = 0;
+            if (_redirector?.TryGetOriginalDestination(srcPort, out _, out var op) == true)
+                originalPort = op;
+
+            (int pid, string name) origin = Options.ResolveProcess
+                ? _engine.ProcessResolver.Resolve(srcPort)
+                : (0, string.Empty);
+
+            var stream = client.GetStream();
+
+            // Peek the start of the stream to determine TLS vs plain HTTP and host.
+            var peek = new byte[8192];
+            int read = await stream.ReadAsync(peek, _ct).ConfigureAwait(false);
+            if (read <= 0) return;
+            var prefix = peek.AsSpan(0, read).ToArray();
+            var prefixed = new PrefixedStream(prefix, stream);
+
+            if (prefix[0] == 0x16) // TLS handshake record
+            {
+                string host = TlsClientHello.TryParseSni(prefix) ?? "unknown";
+                int port = originalPort == 0 ? 443 : originalPort;
+                await RunTlsMitmAsync(prefixed, host, port, origin).ConfigureAwait(false);
+            }
+            else
+            {
+                int port = originalPort == 0 ? 80 : originalPort;
+                var reader = new StreamReaderEx(prefixed);
+                bool keepAlive = true;
+                while (keepAlive && !_ct.IsCancellationRequested)
+                {
+                    var req = await HttpWire.ReadRequestHeadAsync(reader, _ct).ConfigureAwait(false);
+                    if (req is null) break;
+                    string host = req.Headers["Host"] ?? "unknown";
+                    keepAlive = await ProcessRequestAsync(req, reader, prefixed, "http", host, port, origin)
+                        .ConfigureAwait(false);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _engine.RaiseLog($"Transparent connection error: {ex.Message}");
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _engine.Statistics.ActiveConnections);
+            try { client.Dispose(); } catch { /* ignore */ }
+        }
     }
 
     private async Task AcceptLoopAsync()
@@ -127,20 +236,46 @@ internal sealed class ProxyServer : IDisposable
             return;
         }
 
+        await RunTlsMitmAsync(clientStream, host, port, origin).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Performs the TLS man-in-the-middle for an already-established client byte
+    /// stream: presents a leaf cert for <paramref name="host"/>, negotiates ALPN,
+    /// and dispatches to the HTTP/2 connection handler or the HTTP/1.1 loop. Shared
+    /// by the explicit-proxy CONNECT path and the transparent-capture listener.
+    /// </summary>
+    private async Task RunTlsMitmAsync(Stream clientStream, string host, int port,
+        (int pid, string name) origin)
+    {
         SslStream sslClient;
         try
         {
             var leaf = _engine.CertificateAuthority.GetCertificateForHost(host);
             sslClient = new SslStream(clientStream, leaveInnerStreamOpen: false);
-            await sslClient.AuthenticateAsServerAsync(new SslServerAuthenticationOptions
+            var serverOptions = new SslServerAuthenticationOptions
             {
                 ServerCertificate = leaf,
                 ClientCertificateRequired = false,
-            }, _ct).ConfigureAwait(false);
+            };
+            // Offer HTTP/2 via ALPN so h2 clients negotiate it; fall back to HTTP/1.1.
+            if (Options.EnableHttp2)
+                serverOptions.ApplicationProtocols = new List<SslApplicationProtocol>
+                {
+                    SslApplicationProtocol.Http2, SslApplicationProtocol.Http11
+                };
+            await sslClient.AuthenticateAsServerAsync(serverOptions, _ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
             _engine.RaiseLog($"TLS handshake with client failed for {host}: {ex.Message}");
+            return;
+        }
+
+        if (sslClient.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2)
+        {
+            var h2 = new Http2.Http2Connection(_engine, _upstream, sslClient, host, port, origin, _ct);
+            await h2.RunAsync().ConfigureAwait(false);
             return;
         }
 
@@ -271,14 +406,31 @@ internal sealed class ProxyServer : IDisposable
             session.Path = rd.AbsolutePath; session.QueryString = rd.Query.TrimStart('?');
             session.Url = decision.RedirectUrl;
         }
+        // ---- Endpoint redirect (TCP/IP Redirector analog) ------------------
+        // Connect to a different host/port while leaving the request line and
+        // (optionally) the Host header untouched.
+        string connectHost = host;
+        int connectPort = port;
+        if (!string.IsNullOrEmpty(decision.ConnectHost)) connectHost = decision.ConnectHost!;
+        if (decision.ConnectPort > 0) connectPort = decision.ConnectPort;
+        if (decision.RewriteHost && !string.IsNullOrEmpty(decision.ConnectHost))
+        {
+            string newHost = decision.ConnectPort is > 0 and not 80 and not 443
+                ? $"{decision.ConnectHost}:{decision.ConnectPort}"
+                : decision.ConnectHost!;
+            session.RequestHeaders.Set("Host", newHost);
+            session.Host = decision.ConnectHost!;
+        }
+
         if (decision.DelayMs > 0)
             await Task.Delay(decision.DelayMs, _ct).ConfigureAwait(false);
 
         // ---- Connect upstream + forward -------------------------------------
         Upstream.Connection up;
+        var connectStart = sw.Elapsed.TotalMilliseconds;
         try
         {
-            up = await _upstream.ConnectAsync(host, port, scheme == "https", _ct).ConfigureAwait(false);
+            up = await _upstream.ConnectAsync(connectHost, connectPort, scheme == "https", _ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -292,14 +444,20 @@ internal sealed class ProxyServer : IDisposable
 
         using (up)
         {
+            session.Timings.ConnectMs = sw.Elapsed.TotalMilliseconds - connectStart;
+
             var upstreamHeaders = BuildUpstreamHeaders(session, head, isWebSocket);
             var requestBytes = HttpWire.SerializeRequest(head.Method, head.Target, head.Version,
                 upstreamHeaders, session.RequestBody);
             session.State = SessionState.SentToServer;
+            var sendStart = sw.Elapsed.TotalMilliseconds;
             await up.Stream.WriteAsync(requestBytes, _ct).ConfigureAwait(false);
+            session.Timings.SendMs = sw.Elapsed.TotalMilliseconds - sendStart;
 
             var upReader = new StreamReaderEx(up.Stream);
+            var waitStart = sw.Elapsed.TotalMilliseconds;
             var respHead = await HttpWire.ReadResponseHeadAsync(upReader, _ct).ConfigureAwait(false);
+            session.Timings.WaitMs = sw.Elapsed.TotalMilliseconds - waitStart;
             if (respHead is null)
             {
                 session.Error = "Empty response from server";
@@ -353,8 +511,10 @@ internal sealed class ProxyServer : IDisposable
             }
 
             // ---- Ordinary response ------------------------------------------
+            var recvStart = sw.Elapsed.TotalMilliseconds;
             var rawBody = await HttpWire.ReadResponseBodyAsync(upReader, respHead.Headers, bodyForbidden, _ct)
                 .ConfigureAwait(false);
+            session.Timings.ReceiveMs = sw.Elapsed.TotalMilliseconds - recvStart;
             session.BytesReceived = upReader.TotalBytesRead;
 
             // We de-chunk while reading and decode Content-Encoding so the body is
@@ -364,6 +524,8 @@ internal sealed class ProxyServer : IDisposable
             var decoded = HttpWire.Decompress(rawBody, encoding);
             bool wasDecoded = !ReferenceEquals(decoded, rawBody);
             session.ResponseBody = decoded;
+            session.EncodedBodySize = rawBody.LongLength;
+            if (wasDecoded) session.OriginalContentEncoding = encoding;
 
             session.ResponseHeaders.Remove("Transfer-Encoding");
             if (wasDecoded) session.ResponseHeaders.Remove("Content-Encoding");
@@ -382,7 +544,7 @@ internal sealed class ProxyServer : IDisposable
 
             var responseBytes = HttpWire.SerializeResponse(respHead.Version, session.StatusCode,
                 session.StatusText, session.ResponseHeaders, session.ResponseBody);
-            await clientStream.WriteAsync(responseBytes, _ct).ConfigureAwait(false);
+            await WriteThrottledAsync(clientStream, responseBytes).ConfigureAwait(false);
 
             sw.Stop();
             session.Timings.TotalMs = sw.Elapsed.TotalMilliseconds;
@@ -532,6 +694,35 @@ internal sealed class ProxyServer : IDisposable
         _engine.RaiseCompleted(session);
     }
 
+    /// <summary>
+    /// Writes a response to the client, optionally injecting latency and rate-limiting
+    /// throughput to simulate slow networks (the "Network simulation" feature).
+    /// </summary>
+    private async Task WriteThrottledAsync(Stream stream, byte[] data)
+    {
+        var opt = Options;
+        if (opt.ExtraLatencyMs > 0 && opt.ThrottleEnabled)
+            await Task.Delay(opt.ExtraLatencyMs, _ct).ConfigureAwait(false);
+
+        if (!opt.ThrottleEnabled || opt.ThrottleKbps <= 0)
+        {
+            await stream.WriteAsync(data, _ct).ConfigureAwait(false);
+            return;
+        }
+
+        double bytesPerSec = opt.ThrottleKbps * 1024.0 / 8.0;
+        int chunk = Math.Max(64, (int)(bytesPerSec / 20.0)); // ~50 ms slices
+        int offset = 0;
+        while (offset < data.Length)
+        {
+            int n = Math.Min(chunk, data.Length - offset);
+            await stream.WriteAsync(data.AsMemory(offset, n), _ct).ConfigureAwait(false);
+            await stream.FlushAsync(_ct).ConfigureAwait(false);
+            offset += n;
+            await Task.Delay(TimeSpan.FromSeconds(n / bytesPerSec), _ct).ConfigureAwait(false);
+        }
+    }
+
     private static (string host, int port) SplitHostPort(string value, int defaultPort)
     {
         if (string.IsNullOrEmpty(value)) return ("", defaultPort);
@@ -574,5 +765,7 @@ internal sealed class ProxyServer : IDisposable
     public void Dispose()
     {
         try { _listener?.Stop(); } catch { /* ignore */ }
+        try { _transparentListener?.Stop(); } catch { /* ignore */ }
+        try { _redirector?.Dispose(); } catch { /* ignore */ }
     }
 }

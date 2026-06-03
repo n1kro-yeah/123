@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:ctl="using:HttpSpy.App.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="320"
@@ -45,8 +46,12 @@
                     </DataGrid>
                 </TabItem>
                 <TabItem Header="Body">
-                    <TextBox Text="{Binding RequestBodyText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
-                             TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                    <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="6">
+                        <SelectableTextBlock ctl:HighlightBehavior.SourceText="{Binding RequestBodyText}"
+                                             ctl:HighlightBehavior.Language="{Binding RequestBodyLanguage}"
+                                             FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"
+                                             TextWrapping="NoWrap"/>
+                    </ScrollViewer>
                 </TabItem>
                 <TabItem Header="Raw">
                     <TextBox Text="{Binding RequestRaw, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
@@ -82,8 +87,40 @@
                         </DataGrid>
                     </TabItem>
                     <TabItem Header="Body">
-                        <TextBox Text="{Binding ResponseBodyFormatted, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
-                                 TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                        <DockPanel>
+                            <!-- Find bar -->
+                            <Border DockPanel.Dock="Top" Background="#11FFFFFF" Padding="4">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="Find:" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="FindBox" Width="260" Watermark="text to find in body"
+                                             KeyDown="FindBox_KeyDown"/>
+                                    <Button Content="Find next" Click="FindNext_Click"/>
+                                    <TextBlock x:Name="FindStatus" VerticalAlignment="Center" Foreground="#FFB0C4DE"/>
+                                </StackPanel>
+                            </Border>
+                            <ScrollViewer x:Name="BodyScroll" HorizontalScrollBarVisibility="Auto"
+                                          VerticalScrollBarVisibility="Auto" Padding="6">
+                                <SelectableTextBlock x:Name="ResponseBodyBox"
+                                                     ctl:HighlightBehavior.SourceText="{Binding ResponseBodyFormatted}"
+                                                     ctl:HighlightBehavior.Language="{Binding ResponseBodyLanguage}"
+                                                     FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"
+                                                     TextWrapping="NoWrap"/>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </TabItem>
+                    <TabItem Header="JSON" IsVisible="{Binding IsJsonResponse}">
+                        <TreeView ItemsSource="{Binding ResponseJsonTree}" FontSize="12">
+                            <TreeView.ItemTemplate>
+                                <TreeDataTemplate ItemsSource="{Binding Children}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding TypeGlyph}" Foreground="#FF9575CD" Width="22"
+                                                   FontFamily="Cascadia Mono,Consolas,monospace"/>
+                                        <TextBlock Text="{Binding Display}"
+                                                   FontFamily="Cascadia Mono,Consolas,monospace"/>
+                                    </StackPanel>
+                                </TreeDataTemplate>
+                            </TreeView.ItemTemplate>
+                        </TreeView>
                     </TabItem>
                     <TabItem Header="Raw">
                         <TextBox Text="{Binding ResponseRaw, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
@@ -103,9 +140,37 @@
         </TabItem>
 
         <!-- ===== TIMINGS ===== -->
+        <TabItem Header="Summary">
+            <TextBox Text="{Binding SummaryText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                     Margin="4" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="13"/>
+        </TabItem>
+
         <TabItem Header="Timings">
-            <TextBox Text="{Binding TimingsText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
-                     FontFamily="Cascadia Mono,Consolas,monospace" FontSize="13" Margin="4"/>
+            <DockPanel Margin="4">
+                <Border DockPanel.Dock="Top" Padding="6" Background="#11FFFFFF" Margin="0,0,0,6">
+                    <StackPanel>
+                        <TextBlock Text="Waterfall" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <ItemsControl ItemsSource="{Binding TimingBars}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid ColumnDefinitions="70,*,90" Margin="0,1">
+                                        <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
+                                                   FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                                        <Rectangle Grid.Column="1" Height="14" Width="{Binding Width}"
+                                                   HorizontalAlignment="Left" RadiusX="2" RadiusY="2"
+                                                   Fill="{Binding Color}"/>
+                                        <TextBlock Grid.Column="2" Text="{Binding ValueText}" VerticalAlignment="Center"
+                                                   HorizontalAlignment="Right"
+                                                   FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+                <TextBox Text="{Binding TimingsText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
+                         FontFamily="Cascadia Mono,Consolas,monospace" FontSize="13"/>
+            </DockPanel>
         </TabItem>
 
         <!-- ===== WEBSOCKET ===== -->
@@ -131,6 +196,20 @@
                     <DataGridTextColumn Header="Data" Binding="{Binding Data}" Width="*"/>
                 </DataGrid.Columns>
             </DataGrid>
+        </TabItem>
+
+        <!-- ===== gRPC ===== -->
+        <TabItem Header="gRPC" IsVisible="{Binding IsGrpc}">
+            <Grid RowDefinitions="Auto,*,Auto,*">
+                <TextBlock Grid.Row="0" Text="Request messages (protobuf)" FontWeight="Bold" Margin="4"/>
+                <TextBox Grid.Row="1" Text="{Binding GrpcRequestText, Mode=OneWay}" IsReadOnly="True"
+                         AcceptsReturn="True" TextWrapping="NoWrap"
+                         FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                <TextBlock Grid.Row="2" Text="Response messages (protobuf)" FontWeight="Bold" Margin="4"/>
+                <TextBox Grid.Row="3" Text="{Binding GrpcResponseText, Mode=OneWay}" IsReadOnly="True"
+                         AcceptsReturn="True" TextWrapping="NoWrap"
+                         FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+            </Grid>
         </TabItem>
 
         <!-- ===== CODE GEN ===== -->

@@ -14,6 +14,7 @@ public sealed class MessageWindow : Window
         Width = 460;
         SizeToContent = SizeToContent.Height;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        WindowIcons.Apply(this);
         CanResize = false;
 
         var text = new TextBlock

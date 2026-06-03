@@ -80,6 +80,12 @@ public sealed class HttpSession
     public long BytesSent { get; set; }
     public long BytesReceived { get; set; }
 
+    /// <summary>Size of the response body as it arrived on the wire (before decompression).</summary>
+    public long EncodedBodySize { get; set; }
+
+    /// <summary>The original Content-Encoding (e.g. gzip/br) before HttpSpy decoded the body.</summary>
+    public string? OriginalContentEncoding { get; set; }
+
     public string ContentType => ResponseHeaders["Content-Type"] ?? string.Empty;
 
     public string ResponseContentTypeShort

@@ -21,8 +21,22 @@ public sealed class ProxyOptions
     /// <summary>Capture and decode WebSocket frames on upgraded connections.</summary>
     public bool CaptureWebSockets { get; set; } = true;
 
+    /// <summary>Offer HTTP/2 (ALPN "h2") to clients and decode h2 transactions (incl. gRPC).</summary>
+    public bool EnableHttp2 { get; set; } = true;
+
     /// <summary>Hosts that should be tunneled without decryption (e.g. cert-pinned apps).</summary>
     public List<string> TlsPassthroughHosts { get; set; } = new();
+
+    /// <summary>
+    /// EXPERIMENTAL, Windows-only. When true, use the WinDivert driver to divert
+    /// outbound TCP:80/443 to a local transparent listener with no system-proxy
+    /// configuration (the HTTP Debugger "no proxy" capture mode). Requires
+    /// Administrator rights and the WinDivert driver alongside the executable.
+    /// </summary>
+    public bool TransparentCapture { get; set; }
+
+    /// <summary>Local port the transparent-capture listener binds to (all interfaces).</summary>
+    public int TransparentListenPort { get; set; } = 8889;
 
     /// <summary>Maximum body size (bytes) buffered per message; larger bodies are streamed but truncated for display.</summary>
     public long MaxBufferedBody { get; set; } = 32 * 1024 * 1024;
@@ -32,4 +46,14 @@ public sealed class ProxyOptions
     public int UpstreamProxyPort { get; set; }
 
     public int ConnectTimeoutMs { get; set; } = 15000;
+
+    // ---- Network simulation (throttling) ------------------------------------
+    /// <summary>When true, responses to the client are rate-limited / delayed to simulate slow links.</summary>
+    public bool ThrottleEnabled { get; set; }
+
+    /// <summary>Simulated downstream bandwidth in kilobits/sec (0 = unlimited).</summary>
+    public int ThrottleKbps { get; set; }
+
+    /// <summary>Extra latency (ms) injected before each response is delivered.</summary>
+    public int ExtraLatencyMs { get; set; }
 }

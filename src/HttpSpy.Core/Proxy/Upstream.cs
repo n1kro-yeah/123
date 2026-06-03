@@ -19,6 +19,9 @@ public sealed class Upstream
         public required Stream Stream { get; init; }
         public X509Certificate2? ServerCertificate { get; set; }
 
+        /// <summary>The ALPN protocol negotiated with the origin ("h2", "http/1.1", or empty).</summary>
+        public string NegotiatedProtocol { get; set; } = string.Empty;
+
         public void Dispose()
         {
             try { Stream.Dispose(); } catch { /* ignore */ }
@@ -26,7 +29,8 @@ public sealed class Upstream
         }
     }
 
-    public async Task<Connection> ConnectAsync(string host, int port, bool tls, CancellationToken ct)
+    public async Task<Connection> ConnectAsync(string host, int port, bool tls, CancellationToken ct,
+        IReadOnlyList<SslApplicationProtocol>? alpnProtocols = null)
     {
         var tcp = new TcpClient { NoDelay = true };
         using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -48,6 +52,7 @@ public sealed class Upstream
         Stream stream = tcp.GetStream();
         X509Certificate2? serverCert = null;
 
+        string negotiated = string.Empty;
         if (tls)
         {
             var ssl = new SslStream(stream, false, (_, cert, _, _) =>
@@ -55,15 +60,19 @@ public sealed class Upstream
                 if (cert is not null) serverCert = new X509Certificate2(cert);
                 return true; // a debugging proxy accepts upstream certs to remain useful behind interception
             });
-            await ssl.AuthenticateAsClientAsync(new SslClientAuthenticationOptions
+            var options = new SslClientAuthenticationOptions
             {
                 TargetHost = host,
                 EnabledSslProtocols = SslProtocols.None,
-            }, timeoutCts.Token).ConfigureAwait(false);
+            };
+            if (alpnProtocols is not null)
+                options.ApplicationProtocols = alpnProtocols.ToList();
+            await ssl.AuthenticateAsClientAsync(options, timeoutCts.Token).ConfigureAwait(false);
+            negotiated = ssl.NegotiatedApplicationProtocol.ToString();
             stream = ssl;
         }
 
-        return new Connection { Tcp = tcp, Stream = stream, ServerCertificate = serverCert };
+        return new Connection { Tcp = tcp, Stream = stream, ServerCertificate = serverCert, NegotiatedProtocol = negotiated };
     }
 
     private static async Task SendConnectAsync(Stream stream, string host, int port, CancellationToken ct)

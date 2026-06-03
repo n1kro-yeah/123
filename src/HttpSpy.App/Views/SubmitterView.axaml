@@ -1,13 +1,14 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:ctl="using:HttpSpy.App.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
              x:Class="HttpSpy.App.Views.SubmitterView"
              x:DataType="vm:SubmitterViewModel">
 
-    <Grid RowDefinitions="Auto,*,4,*" Margin="8">
+    <Grid RowDefinitions="Auto,Auto,*,4,*" Margin="8">
         <!-- request line -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
             <ComboBox ItemsSource="{Binding Methods}" SelectedItem="{Binding Method}" MinWidth="110"/>
@@ -17,8 +18,17 @@
             <TextBlock Text="{Binding Elapsed}" VerticalAlignment="Center" Foreground="#FFB0C4DE"/>
         </StackPanel>
 
+        <!-- import from cURL -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+            <TextBlock Text="Import cURL:" VerticalAlignment="Center"/>
+            <TextBox Text="{Binding CurlImport}" Width="640"
+                     Watermark="paste a curl command (browser → Copy as cURL)"
+                     ToolTip.Tip="Parses -X/-H/-d/--data/--json/-G/-u and fills the composer"/>
+            <Button Content="Import" Command="{Binding ImportCurlCommand}" MinWidth="80"/>
+        </StackPanel>
+
         <!-- request editor -->
-        <Grid Grid.Row="1" ColumnDefinitions="*,8,*">
+        <Grid Grid.Row="2" ColumnDefinitions="*,8,*">
             <DockPanel Grid.Column="0">
                 <TextBlock DockPanel.Dock="Top" Text="Request headers" FontWeight="Bold" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding HeadersText}" AcceptsReturn="True" TextWrapping="NoWrap"
@@ -31,10 +41,10 @@
             </DockPanel>
         </Grid>
 
-        <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch" Background="#33FFFFFF"/>
+        <GridSplitter Grid.Row="3" Height="4" HorizontalAlignment="Stretch" Background="#33FFFFFF"/>
 
         <!-- response -->
-        <Grid Grid.Row="3" ColumnDefinitions="*,8,2*">
+        <Grid Grid.Row="4" ColumnDefinitions="*,8,2*">
             <DockPanel Grid.Column="0">
                 <TextBlock DockPanel.Dock="Top" Text="Response headers" FontWeight="Bold" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding ResponseHeaders, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
@@ -42,8 +52,12 @@
             </DockPanel>
             <DockPanel Grid.Column="2">
                 <TextBlock DockPanel.Dock="Top" Text="Response body" FontWeight="Bold" Margin="0,0,0,4"/>
-                <TextBox Text="{Binding ResponseBody, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
-                         TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="6">
+                    <SelectableTextBlock ctl:HighlightBehavior.SourceText="{Binding ResponseBody}"
+                                         ctl:HighlightBehavior.Language="{Binding ResponseBodyLanguage}"
+                                         FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"
+                                         TextWrapping="NoWrap"/>
+                </ScrollViewer>
             </DockPanel>
         </Grid>
     </Grid>

@@ -7,6 +7,7 @@ using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using HttpSpy.Core.Export;
 using HttpSpy.Core.Models;
+using HttpSpy.Core.Proxy.Grpc;
 using HttpSpy.Core.Util;
 
 namespace HttpSpy.App.ViewModels;
@@ -34,6 +35,9 @@ public sealed class InspectorViewModel : ViewModelBase
 
     public string RequestLine => _session is null ? "" : $"{_session.Method} {_session.FullUrl} {_session.HttpVersion}";
     public string RequestBodyText => _session?.RequestBodyText ?? "";
+
+    /// <summary>Syntax language used to colourise the request body viewer.</summary>
+    public Controls.SyntaxLanguage RequestBodyLanguage => LanguageFor(_session?.RequestBodyKind);
     public string RequestRaw => _session is null ? "" : BuildRaw(true);
     public bool HasRequestBody => _session is { RequestBody.Length: > 0 };
 
@@ -58,6 +62,16 @@ public sealed class InspectorViewModel : ViewModelBase
             };
         }
     }
+
+    /// <summary>Syntax language used to colourise the response body viewer.</summary>
+    public Controls.SyntaxLanguage ResponseBodyLanguage => LanguageFor(_session?.ResponseBodyKind);
+
+    private static Controls.SyntaxLanguage LanguageFor(BodyContentType? kind) => kind switch
+    {
+        BodyContentType.Json => Controls.SyntaxLanguage.Json,
+        BodyContentType.Xml or BodyContentType.Html => Controls.SyntaxLanguage.Xml,
+        _ => Controls.SyntaxLanguage.None,
+    };
 
     public string ResponseBodyRaw => _session?.ResponseBodyText ?? "";
     public string ResponseHex => _session is null ? "" : BodyFormatter.HexDump(_session.ResponseBody);
@@ -92,6 +106,118 @@ public sealed class InspectorViewModel : ViewModelBase
     }
 
     private static string Fmt(double v) => v < 0 ? "—" : $"{v:F1} ms";
+
+    // ---- Summary -------------------------------------------------------------
+    /// <summary>
+    /// A consolidated overview (HTTP Debugger "Summary" pane): sizes, transfer
+    /// speed, and compression ratio derived from Content-Encoding/Content-Length.
+    /// </summary>
+    public string SummaryText
+    {
+        get
+        {
+            if (_session is null) return "";
+            var s = _session;
+            long decoded = s.ResponseBody.LongLength;
+            // Prefer the wire size recorded before decompression; fall back to the
+            // live Content-Encoding/Content-Length headers (e.g. loaded sessions).
+            string? enc = s.OriginalContentEncoding ?? s.ResponseHeaders["Content-Encoding"];
+            long wire = s.EncodedBodySize > 0 ? s.EncodedBodySize : ParseLong(s.ResponseHeaders["Content-Length"]);
+            if (wire <= 0) wire = decoded;
+
+            double seconds = s.DurationMs > 0 ? s.DurationMs / 1000.0 : 0;
+            string speed = seconds > 0
+                ? $"{decoded / seconds / 1024.0:F1} KB/s"
+                : "—";
+
+            string compression;
+            if (!string.IsNullOrEmpty(enc) && !enc.Equals("identity", StringComparison.OrdinalIgnoreCase)
+                && decoded > 0 && wire > 0 && wire < decoded)
+            {
+                double ratio = (1.0 - (double)wire / decoded) * 100.0;
+                compression = $"{enc} — {ratio:F1}% smaller ({wire:N0} → {decoded:N0} bytes)";
+            }
+            else compression = string.IsNullOrEmpty(enc) ? "none" : enc;
+
+            return $"URL:          {s.FullUrl}\n" +
+                   $"Method:       {s.Method}    Status: {s.StatusCode} {s.StatusText}\n" +
+                   $"Protocol:     {s.HttpVersion} → {s.ResponseHttpVersion}\n" +
+                   $"Process:      {s.ProcessName} (PID {s.ProcessId})\n" +
+                   $"Content type: {s.ResponseContentTypeShort}\n\n" +
+                   $"Request size:  {s.BytesSent:N0} bytes\n" +
+                   $"Response size: {s.BytesReceived:N0} bytes (body {decoded:N0})\n" +
+                   $"Duration:      {s.DurationMs:F1} ms\n" +
+                   $"Speed:         {speed}\n" +
+                   $"Compression:   {compression}";
+        }
+    }
+
+    private static long ParseLong(string? s) => long.TryParse(s, out var v) ? v : 0;
+
+    // ---- Timing waterfall ----------------------------------------------------
+    public ObservableCollection<TimingBar> TimingBars { get; } = new();
+
+    private void RebuildTimingBars()
+    {
+        TimingBars.Clear();
+        if (_session is null) return;
+        var t = _session.Timings;
+        var phases = new (string Label, double Ms, string Color)[]
+        {
+            ("DNS", t.DnsMs, "#9575CD"),
+            ("Connect", t.ConnectMs, "#4FC3F7"),
+            ("TLS", t.TlsMs, "#4DB6AC"),
+            ("Send", t.SendMs, "#81C784"),
+            ("Wait", t.WaitMs, "#FFB74D"),
+            ("Receive", t.ReceiveMs, "#E57373"),
+        };
+        double total = phases.Where(p => p.Ms > 0).Sum(p => p.Ms);
+        if (total <= 0) total = t.TotalMs > 0 ? t.TotalMs : 1;
+        const double scale = 520.0;
+        foreach (var p in phases)
+        {
+            if (p.Ms <= 0) continue;
+            TimingBars.Add(new TimingBar
+            {
+                Label = p.Label,
+                Width = Math.Max(2.0, p.Ms / total * scale),
+                Color = p.Color,
+                ValueText = $"{p.Ms:F1} ms",
+            });
+        }
+    }
+
+    // ---- JSON tree -----------------------------------------------------------
+    public ObservableCollection<JsonTreeNode> ResponseJsonTree { get; } = new();
+    public bool IsJsonResponse => _session?.ResponseBodyKind == BodyContentType.Json;
+
+    private void RebuildJsonTree()
+    {
+        ResponseJsonTree.Clear();
+        if (_session is null || _session.ResponseBodyKind != BodyContentType.Json) return;
+        foreach (var node in JsonTreeNode.Parse(_session.ResponseBodyText))
+            ResponseJsonTree.Add(node);
+    }
+
+    // ---- gRPC ----------------------------------------------------------------
+    /// <summary>True when this transaction carries gRPC (application/grpc) payloads.</summary>
+    public bool IsGrpc =>
+        _session is not null &&
+        (GrpcDecoder.IsGrpc(_session.RequestHeaders["Content-Type"]) ||
+         GrpcDecoder.IsGrpc(_session.ResponseHeaders["Content-Type"]));
+
+    public string GrpcRequestText => DecodeGrpc(
+        _session?.RequestBody, _session?.RequestHeaders["grpc-encoding"]);
+
+    public string GrpcResponseText => DecodeGrpc(
+        _session?.ResponseBody, _session?.ResponseHeaders["grpc-encoding"]);
+
+    private static string DecodeGrpc(byte[]? body, string? encoding)
+    {
+        if (body is null || body.Length == 0) return "(empty)";
+        try { return GrpcDecoder.RenderAll(GrpcDecoder.Decode(body, encoding)); }
+        catch (Exception ex) { return $"(failed to decode gRPC: {ex.Message})"; }
+    }
 
     // ---- WebSocket / SSE -----------------------------------------------------
     public ObservableCollection<WebSocketFrame> WebSocketFrames { get; } = new();
@@ -153,7 +279,14 @@ public sealed class InspectorViewModel : ViewModelBase
                     FormFields.Add(new NameValue(f.Key, f.Value));
 
             TryLoadImage();
+            RebuildJsonTree();
+            RebuildTimingBars();
             SyncStreaming();
+        }
+        else
+        {
+            ResponseJsonTree.Clear();
+            TimingBars.Clear();
         }
 
         foreach (var name in DynamicProperties) OnPropertyChanged(name);
@@ -211,5 +344,8 @@ public sealed class InspectorViewModel : ViewModelBase
         nameof(RequestHex), nameof(StatusLine), nameof(ResponseBodyFormatted), nameof(ResponseBodyRaw),
         nameof(ResponseHex), nameof(ResponseRaw), nameof(HasResponseBody), nameof(TimingsText),
         nameof(IsWebSocket), nameof(IsSse), nameof(GeneratedCode), nameof(HasImagePreview),
+        nameof(IsJsonResponse), nameof(SummaryText),
+        nameof(IsGrpc), nameof(GrpcRequestText), nameof(GrpcResponseText),
+        nameof(RequestBodyLanguage), nameof(ResponseBodyLanguage),
     };
 }

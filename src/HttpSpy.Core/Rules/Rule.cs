@@ -46,14 +46,52 @@ public sealed class Rule
     /// <summary>For ModifyRequest/ModifyResponse: replace the whole body when set.</summary>
     public string? ReplacementBody { get; set; }
 
+    /// <summary>
+    /// For ModifyRequest/ModifyResponse: regex find/replace operations applied to
+    /// the raw header block and/or the body (HTTP Debugger "HTTP Modifier" analog).
+    /// Capture groups (<c>$1</c>) and the escapes <c>\r \n \t</c> are supported;
+    /// <c>Content-Length</c> is recalculated automatically.
+    /// </summary>
+    public List<ModifierRule> ModifierRules { get; set; } = new();
+
+    /// <summary>
+    /// Optional extra regex match rules evaluated against the raw header block
+    /// (case-insensitive). When present, all of them must match for the rule to
+    /// fire — mirrors HTTP Debugger's multi-line "Match Rules" box.
+    /// </summary>
+    public List<string> HeaderMatchRegexes { get; set; } = new();
+
     /// <summary>For Delay: artificial latency in milliseconds.</summary>
     public int DelayMs { get; set; }
+
+    /// <summary>For MapLocal: path to a local file served as the response body.</summary>
+    public string? MapLocalPath { get; set; }
+
+    // ---- Endpoint redirect (TCP/IP Redirector analog) ------------------------
+    /// <summary>For RedirectEndpoint: the upstream host to connect to instead.</summary>
+    public string? RedirectHost { get; set; }
+    /// <summary>For RedirectEndpoint: the upstream port to connect to instead (0 = keep).</summary>
+    public int RedirectPort { get; set; }
+    /// <summary>For RedirectEndpoint: rewrite the Host header to the new endpoint.</summary>
+    public bool RewriteHostHeader { get; set; }
 
     /// <summary>For Breakpoint: which phase(s) to pause on.</summary>
     public BreakpointPhase BreakpointPhase { get; set; } = BreakpointPhase.Both;
 
+    // ---- Highlighting (Standard + RegExp rules) ------------------------------
     /// <summary>For Highlight: ARGB color.</summary>
     public uint HighlightColor { get; set; } = 0xFFFFF2CC;
+    /// <summary>For Highlight (Standard): the column the rule is evaluated against.</summary>
+    public HighlightColumn HighlightColumn { get; set; } = HighlightColumn.Status;
+    /// <summary>For Highlight (Standard): the comparison operator.</summary>
+    public HighlightOperator HighlightOperator { get; set; } = HighlightOperator.IsBigger;
+    /// <summary>For Highlight (Standard): the comparison value (text or number).</summary>
+    public string HighlightValue { get; set; } = "399";
+    /// <summary>For Highlight (Standard, IsBetween): the upper bound.</summary>
+    public string HighlightValue2 { get; set; } = string.Empty;
+
+    /// <summary>For Bookmark: an optional comment attached to matching items.</summary>
+    public string? BookmarkComment { get; set; }
 
     public long HitCount { get; set; }
 
@@ -109,8 +147,30 @@ public sealed class Rule
         var clone = (Rule)MemberwiseClone();
         clone.Id = Guid.NewGuid();
         clone.HeaderEdits = HeaderEdits.Select(h => h.Clone()).ToList();
+        clone.ModifierRules = ModifierRules.Select(m => m.Clone()).ToList();
+        clone.HeaderMatchRegexes = new List<string>(HeaderMatchRegexes);
         clone._compiled = null;
         return clone;
+    }
+
+    /// <summary>
+    /// Evaluates the optional <see cref="HeaderMatchRegexes"/> (all must match)
+    /// against a raw header block. Returns true when there are no extra rules.
+    /// </summary>
+    public bool HeaderRegexesMatch(string rawHeaderBlock)
+    {
+        if (HeaderMatchRegexes.Count == 0) return true;
+        foreach (var pattern in HeaderMatchRegexes)
+        {
+            if (string.IsNullOrWhiteSpace(pattern)) continue;
+            try
+            {
+                if (!Regex.IsMatch(rawHeaderBlock, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline))
+                    return false;
+            }
+            catch (ArgumentException) { return false; }
+        }
+        return true;
     }
 }
 
@@ -124,4 +184,18 @@ public sealed class HeaderEdit
     public string Value { get; set; } = string.Empty;
 
     public HeaderEdit Clone() => new() { Operation = Operation, Name = Name, Value = Value };
+}
+
+/// <summary>
+/// One regex find/replace operation of the HTTP Modifier. The replacement
+/// supports .NET substitution groups (<c>$1</c>) plus the literal escapes
+/// <c>\r \n \t</c>.
+/// </summary>
+public sealed class ModifierRule
+{
+    public ModifierTarget Target { get; set; } = ModifierTarget.RequestHeaders;
+    public string Find { get; set; } = string.Empty;
+    public string Replace { get; set; } = string.Empty;
+
+    public ModifierRule Clone() => new() { Target = Target, Find = Find, Replace = Replace };
 }

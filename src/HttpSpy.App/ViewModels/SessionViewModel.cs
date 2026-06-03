@@ -33,11 +33,11 @@ public sealed class SessionViewModel : ObservableObject
 
     public string SchemeGlyph => Kind switch
     {
-        SessionKind.Https => "HTTPS",
         SessionKind.WebSocket => "WS",
         SessionKind.ServerSentEvents => "SSE",
         SessionKind.Tunnel => "TUN",
-        _ => "HTTP"
+        SessionKind.Https => Model.HttpVersion.Contains('2') ? "H2" : "HTTPS",
+        _ => Model.HttpVersion.Contains('2') ? "H2C" : "HTTP"
     };
 
     /// <summary>Raises change notifications for the dynamic columns after the model updates.</summary>

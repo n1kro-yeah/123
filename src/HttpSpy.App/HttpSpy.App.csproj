@@ -9,6 +9,11 @@
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <AssemblyName>HttpSpy</AssemblyName>
     <RootNamespace>HttpSpy.App</RootNamespace>
+    <ApplicationIcon>Assets\httpspy.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+    <Product>HttpSpy</Product>
+    <Company>HttpSpy</Company>
+    <AssemblyTitle>HttpSpy — HTTP/HTTPS Debugger</AssemblyTitle>
   </PropertyGroup>
 
   <ItemGroup>
