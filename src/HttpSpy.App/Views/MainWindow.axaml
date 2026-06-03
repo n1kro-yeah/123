@@ -6,45 +6,98 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
         x:Class="HttpSpy.App.Views.MainWindow"
+        x:Name="Root"
         x:DataType="vm:MainWindowViewModel"
         Width="1280" Height="800"
+        Icon="/Assets/httpspy.ico"
         Title="HttpSpy — HTTP/HTTPS Debugger">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
+    <Window.KeyBindings>
+        <KeyBinding Gesture="F5" Command="{Binding ToggleCaptureCommand}"/>
+        <KeyBinding Gesture="Ctrl+L" Command="{Binding ClearSessionsCommand}"/>
+        <KeyBinding Gesture="Delete" Command="{Binding DeleteSelectedCommand}"/>
+        <KeyBinding Gesture="Ctrl+R" Command="{Binding ResendToSubmitterCommand}"/>
+        <KeyBinding Gesture="Ctrl+U" Command="{Binding CopyUrlCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+C" Command="{Binding CopyAsCurlCommand}"/>
+        <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleBookmarkCommand}"/>
+        <KeyBinding Gesture="F3" Command="{Binding FindNextCommand}"/>
+        <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveSessionCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+L" Command="{Binding ClearAllFiltersCommand}"/>
+        <KeyBinding Gesture="Ctrl+D1" Command="{Binding SelectTabCommand}" CommandParameter="0"/>
+        <KeyBinding Gesture="Ctrl+D2" Command="{Binding SelectTabCommand}" CommandParameter="1"/>
+        <KeyBinding Gesture="Ctrl+D3" Command="{Binding SelectTabCommand}" CommandParameter="2"/>
+        <KeyBinding Gesture="Ctrl+D4" Command="{Binding SelectTabCommand}" CommandParameter="3"/>
+    </Window.KeyBindings>
+
     <DockPanel>
         <!-- ===== Menu ===== -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
                 <MenuItem Header="Open session…" Command="{Binding OpenSessionCommand}"/>
-                <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}"/>
+                <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}" InputGesture="Ctrl+S"/>
                 <Separator/>
                 <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}"/>
                 <MenuItem Header="Export CSV…" Command="{Binding ExportCsvCommand}"/>
+                <MenuItem Header="Export JSON…" Command="{Binding ExportJsonCommand}"/>
+                <MenuItem Header="Export XML…" Command="{Binding ExportXmlCommand}"/>
+                <MenuItem Header="Export TXT…" Command="{Binding ExportTxtCommand}"/>
+                <MenuItem Header="Save each session to separate files…" Command="{Binding ExportSeparateFilesCommand}"/>
             </MenuItem>
             <MenuItem Header="_Capture">
                 <MenuItem Header="Start" Command="{Binding StartCaptureCommand}"/>
                 <MenuItem Header="Stop" Command="{Binding StopCaptureCommand}"/>
-                <MenuItem Header="Clear" Command="{Binding ClearSessionsCommand}"/>
+                <MenuItem Header="Start / Stop" Command="{Binding ToggleCaptureCommand}" InputGesture="F5"/>
+                <MenuItem Header="Clear" Command="{Binding ClearSessionsCommand}" InputGesture="Ctrl+L"/>
             </MenuItem>
             <MenuItem Header="_Session">
-                <MenuItem Header="Resend in Submitter" Command="{Binding ResendToSubmitterCommand}"/>
-                <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}"/>
-                <MenuItem Header="Copy as cURL" Command="{Binding CopyAsCurlCommand}"/>
-                <MenuItem Header="Toggle bookmark" Command="{Binding ToggleBookmarkCommand}"/>
-                <MenuItem Header="Delete" Command="{Binding DeleteSelectedCommand}"/>
+                <MenuItem Header="Resend in Submitter" Command="{Binding ResendToSubmitterCommand}" InputGesture="Ctrl+R"/>
+                <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}" InputGesture="Ctrl+U"/>
+                <MenuItem Header="Copy as cURL" Command="{Binding CopyAsCurlCommand}" InputGesture="Ctrl+Shift+C"/>
+                <MenuItem Header="Toggle bookmark" Command="{Binding ToggleBookmarkCommand}" InputGesture="Ctrl+B"/>
+                <MenuItem Header="Delete" Command="{Binding DeleteSelectedCommand}" InputGesture="Delete"/>
+            </MenuItem>
+            <MenuItem Header="_View">
+                <MenuItem Header="Columns">
+                    <MenuItem Header="Proto" ToggleType="CheckBox" IsChecked="{Binding ShowProtoColumn, Mode=TwoWay}"/>
+                    <MenuItem Header="Method" ToggleType="CheckBox" IsChecked="{Binding ShowMethodColumn, Mode=TwoWay}"/>
+                    <MenuItem Header="Type" ToggleType="CheckBox" IsChecked="{Binding ShowTypeColumn, Mode=TwoWay}"/>
+                    <MenuItem Header="Size" ToggleType="CheckBox" IsChecked="{Binding ShowSizeColumn, Mode=TwoWay}"/>
+                    <MenuItem Header="Time" ToggleType="CheckBox" IsChecked="{Binding ShowTimeColumn, Mode=TwoWay}"/>
+                    <MenuItem Header="Process" ToggleType="CheckBox" IsChecked="{Binding ShowProcessColumn, Mode=TwoWay}"/>
+                </MenuItem>
+                <Separator/>
+                <MenuItem Header="Auto-scroll" ToggleType="CheckBox" IsChecked="{Binding AutoScroll, Mode=TwoWay}"/>
+                <MenuItem Header="Dark theme" ToggleType="CheckBox" IsChecked="{Binding IsDarkTheme, Mode=TwoWay}"/>
+                <Separator/>
+                <MenuItem Header="Clear all filters" Command="{Binding ClearAllFiltersCommand}" InputGesture="Ctrl+Shift+L"/>
             </MenuItem>
             <MenuItem Header="_HTTPS">
-                <MenuItem Header="Install / trust root certificate" Command="{Binding InstallCertificateCommand}"/>
+                <MenuItem Header="Trust root certificate" Command="{Binding InstallCertificateCommand}"/>
+                <MenuItem Header="Export root certificate (.cer)…" Command="{Binding ExportCertificateCommand}"/>
+                <MenuItem Header="Certificate info / copy thumbprint" Command="{Binding ShowCertificateInfoCommand}"/>
+                <Separator/>
+                <MenuItem Header="Remove trust" Command="{Binding UninstallCertificateCommand}"/>
+            </MenuItem>
+            <MenuItem Header="_Tools">
+                <MenuItem Header="Options / Network simulation…" Command="{Binding OpenOptionsCommand}"/>
+                <MenuItem Header="Filters…" Command="{Binding OpenFiltersCommand}"/>
+                <MenuItem Header="Converter (URL / Base64 / Hex / JSON)…" Command="{Binding OpenConverterCommand}"/>
+                <MenuItem Header="Mark selected as compare baseline" Command="{Binding MarkForCompareCommand}"/>
+                <MenuItem Header="Compare selected with baseline" Command="{Binding CompareWithBaselineCommand}"/>
+                <Separator/>
+                <MenuItem Header="Toggle dark / light theme" Command="{Binding ToggleThemeCommand}"/>
             </MenuItem>
         </Menu>
 
         <!-- ===== Toolbar ===== -->
         <Border DockPanel.Dock="Top" Background="#22000000" Padding="6">
             <StackPanel Orientation="Horizontal" Spacing="6">
-                <Button Command="{Binding ToggleCaptureCommand}" MinWidth="110">
+                <Button Command="{Binding ToggleCaptureCommand}" MinWidth="110"
+                        ToolTip.Tip="Start / stop capturing traffic (F5)">
                     <TextBlock>
                         <TextBlock.Text>
                             <Binding Path="IsCapturing">
@@ -55,18 +108,52 @@
                         </TextBlock.Text>
                     </TextBlock>
                 </Button>
-                <Button Content="Clear" Command="{Binding ClearSessionsCommand}"/>
-                <Button Content="Save" Command="{Binding SaveSessionCommand}"/>
-                <Button Content="Open" Command="{Binding OpenSessionCommand}"/>
-                <Button Content="Export HAR" Command="{Binding ExportHarCommand}"/>
+                <Button Content="Clear" Command="{Binding ClearSessionsCommand}"
+                        ToolTip.Tip="Clear all captured sessions (Ctrl+L)"/>
+                <Button Content="Save" Command="{Binding SaveSessionCommand}"
+                        ToolTip.Tip="Save the capture to a .hspy session file (Ctrl+S)"/>
+                <Button Content="Open" Command="{Binding OpenSessionCommand}"
+                        ToolTip.Tip="Open a previously saved .hspy session file"/>
+                <Button Content="Export HAR" Command="{Binding ExportHarCommand}"
+                        ToolTip.Tip="Export all sessions to a standard HAR archive"/>
                 <Separator Width="1" Background="#44FFFFFF" Margin="4,2"/>
                 <TextBlock Text="Port:" VerticalAlignment="Center"/>
                 <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"
-                               FormatString="0" Width="110" Increment="1"/>
-                <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}"/>
-                <CheckBox Content="System proxy" IsChecked="{Binding SetSystemProxy}"/>
-                <Button Content="Trust cert" Command="{Binding InstallCertificateCommand}"/>
-                <TextBlock Text="{Binding CertStatus}" VerticalAlignment="Center" Foreground="#FFB0C4DE"/>
+                               FormatString="0" Width="110" Increment="1"
+                               ToolTip.Tip="TCP port the proxy listens on (default 8888). Applied on next Start."/>
+                <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}"
+                          ToolTip.Tip="Enable MITM decryption of HTTPS traffic (requires the root certificate to be trusted)"/>
+                <CheckBox Content="System proxy" IsChecked="{Binding SetSystemProxy}"
+                          ToolTip.Tip="Route all Windows traffic through HttpSpy automatically while capturing"/>
+                <DropDownButton Content="🔒 Certificate"
+                                ToolTip.Tip="Trust, export or inspect the HttpSpy root certificate">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Header="Trust root certificate" Command="{Binding InstallCertificateCommand}"/>
+                            <MenuItem Header="Export root certificate (.cer)…" Command="{Binding ExportCertificateCommand}"/>
+                            <MenuItem Header="Certificate info / copy thumbprint" Command="{Binding ShowCertificateInfoCommand}"/>
+                            <Separator/>
+                            <MenuItem Header="Remove trust" Command="{Binding UninstallCertificateCommand}"/>
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
+                <Separator Width="1" Background="#44FFFFFF" Margin="4,2"/>
+                <Button Content="⚙ Options" Command="{Binding OpenOptionsCommand}"
+                        ToolTip.Tip="Network simulation, upstream proxy and TLS settings"/>
+                <Button Content="◑ Theme" Command="{Binding ToggleThemeCommand}"
+                        ToolTip.Tip="Toggle dark / light theme"/>
+                <TextBlock Text="{Binding CertStatus}" VerticalAlignment="Center"
+                           Classes.trusted="{Binding IsCertTrusted}"
+                           ToolTip.Tip="HTTPS decryption is ready only when the root CA is trusted">
+                    <TextBlock.Styles>
+                        <Style Selector="TextBlock">
+                            <Setter Property="Foreground" Value="#FFD29922"/>
+                        </Style>
+                        <Style Selector="TextBlock.trusted">
+                            <Setter Property="Foreground" Value="#FF3FB950"/>
+                        </Style>
+                    </TextBlock.Styles>
+                </TextBlock>
             </StackPanel>
         </Border>
 
@@ -85,11 +172,30 @@
                     <Border Grid.Row="0" Padding="6" Background="#11FFFFFF">
                         <StackPanel Orientation="Horizontal" Spacing="8">
                             <TextBlock Text="Filter:" VerticalAlignment="Center"/>
-                            <TextBox Text="{Binding FilterText}" Watermark="url / host / method / status / process"
+                            <TextBox x:Name="FilterBox" Text="{Binding FilterText}"
+                                     Watermark="url / host / method / status / process  (Ctrl+F)"
                                      Width="360"/>
                             <ComboBox ItemsSource="{Binding MethodFilters}" SelectedItem="{Binding MethodFilter}"
                                       Width="110"/>
                             <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnly}"/>
+                            <CheckBox Content="Search bodies" IsChecked="{Binding SearchBodies}"
+                                      ToolTip.Tip="Also match the filter text inside request/response bodies"/>
+                            <CheckBox Content="Auto-scroll" IsChecked="{Binding AutoScroll}"/>
+                            <TextBlock Text="Group:" VerticalAlignment="Center"/>
+                            <ComboBox ItemsSource="{Binding GroupByOptions}" SelectedItem="{Binding GroupBy}"
+                                      Width="120" ToolTip.Tip="Group the grid into a tree by a column"/>
+                            <Button Content="Filters…" Command="{Binding OpenFiltersCommand}"
+                                    ToolTip.Tip="Multi-rule show/hide filters (persisted)"/>
+                            <Separator Width="1" Background="#44FFFFFF" Margin="4,2"/>
+                            <TextBlock Text="Search:" VerticalAlignment="Center"/>
+                            <TextBox x:Name="SearchBox" Text="{Binding AdvancedSearchText}" Width="200"
+                                     Watermark="headers + body…  (Ctrl+Shift+F)"
+                                     ToolTip.Tip="Advanced search across headers and bodies of all sessions"/>
+                            <Button Content="Find Next" Command="{Binding FindNextCommand}"/>
+                            <Button Content="⮕ Bookmark" Command="{Binding NextBookmarkCommand}"
+                                    ToolTip.Tip="Jump to next bookmarked session"/>
+                            <TextBlock Text="{Binding AdvancedSearchStatus}" VerticalAlignment="Center"
+                                       Foreground="#FFB0C4DE" MinWidth="70"/>
                         </StackPanel>
                     </Border>
 
@@ -115,24 +221,68 @@
 
                         <!-- Session grid -->
                         <DataGrid Grid.Row="1" x:Name="SessionGrid"
-                                  ItemsSource="{Binding Sessions}"
+                                  ItemsSource="{Binding SessionsView}"
                                   SelectedItem="{Binding SelectedSession}"
                                   IsReadOnly="True" CanUserResizeColumns="True"
+                                  CanUserSortColumns="True"
                                   GridLinesVisibility="Horizontal" SelectionMode="Single"
                                   FontSize="12">
+                            <DataGrid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Resend in Submitter" Command="{Binding #Root.DataContext.ResendToSubmitterCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="Copy URL" Command="{Binding #Root.DataContext.CopyUrlCommand}"/>
+                                    <MenuItem Header="Copy as cURL" Command="{Binding #Root.DataContext.CopyAsCurlCommand}"/>
+                                    <MenuItem Header="Copy response body" Command="{Binding #Root.DataContext.CopyResponseBodyCommand}"/>
+                                    <MenuItem Header="Save response body…" Command="{Binding #Root.DataContext.SaveResponseBodyCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="Apply as filter">
+                                        <MenuItem Header="Focus on this host" Command="{Binding #Root.DataContext.FocusHostCommand}"/>
+                                        <MenuItem Header="Hide this host" Command="{Binding #Root.DataContext.HideHostCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Focus on this process" Command="{Binding #Root.DataContext.FocusProcessCommand}"/>
+                                        <MenuItem Header="Hide this process" Command="{Binding #Root.DataContext.HideProcessCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Only this status code" Command="{Binding #Root.DataContext.FocusStatusCommand}"/>
+                                        <MenuItem Header="Only this content type" Command="{Binding #Root.DataContext.FocusContentTypeCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Clear all filters" Command="{Binding #Root.DataContext.ClearAllFiltersCommand}"/>
+                                    </MenuItem>
+                                    <Separator/>
+                                    <MenuItem Header="Toggle bookmark" Command="{Binding #Root.DataContext.ToggleBookmarkCommand}"/>
+                                    <MenuItem Header="Mark as compare baseline" Command="{Binding #Root.DataContext.MarkForCompareCommand}"/>
+                                    <MenuItem Header="Compare with baseline" Command="{Binding #Root.DataContext.CompareWithBaselineCommand}"/>
+                                    <Separator/>
+                                    <MenuItem Header="Delete" Command="{Binding #Root.DataContext.DeleteSelectedCommand}"/>
+                                </ContextMenu>
+                            </DataGrid.ContextMenu>
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="55"/>
-                                <DataGridTextColumn Header="Proto" Binding="{Binding SchemeGlyph}" Width="60"/>
+                                <DataGridTextColumn Header="Proto" Binding="{Binding SchemeGlyph}" Width="72"/>
                                 <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="75"/>
-                                <DataGridTextColumn Header="Result" Binding="{Binding StatusDisplay}" Width="90"/>
+                                <DataGridTextColumn Header="Result" Binding="{Binding StatusDisplay}" Width="120"/>
                                 <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="190"/>
                                 <DataGridTextColumn Header="URL" Binding="{Binding PathAndQuery}" Width="*"/>
-                                <DataGridTextColumn Header="Type" Binding="{Binding ContentType}" Width="130"/>
+                                <DataGridTextColumn Header="Type" Binding="{Binding ContentType}" Width="150"/>
                                 <DataGridTextColumn Header="Size" Binding="{Binding Size, Converter={StaticResource ByteSize}}" Width="80"/>
                                 <DataGridTextColumn Header="Time" Binding="{Binding DurationMs, StringFormat='{}{0:F0} ms'}" Width="80"/>
                                 <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="120"/>
                             </DataGrid.Columns>
                         </DataGrid>
+
+                        <!-- Empty state: shown until the first session is captured -->
+                        <Border Grid.Row="1" IsHitTestVisible="False"
+                                IsVisible="{Binding !HasSessions}">
+                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
+                                        MaxWidth="460">
+                                <TextBlock Text="🔍" FontSize="48" HorizontalAlignment="Center" Opacity="0.5"/>
+                                <TextBlock Text="No sessions captured yet"
+                                           FontSize="18" FontWeight="SemiBold"
+                                           HorizontalAlignment="Center" Opacity="0.85"/>
+                                <TextBlock TextWrapping="Wrap" TextAlignment="Center" Opacity="0.6"
+                                           Text="Press F5 (or “Start capture”) and route traffic through the proxy on 127.0.0.1 at the chosen port. For HTTPS, click 🔒 Certificate ▸ Trust root certificate first."/>
+                            </StackPanel>
+                        </Border>
 
                         <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch" Background="#33FFFFFF"/>
 
@@ -200,6 +350,51 @@
                                      FontFamily="Cascadia Mono,Consolas,monospace"/>
                             <TextBlock Text="Delay (ms, Delay action)"/>
                             <NumericUpDown Value="{Binding DelayMs}" Minimum="0" Maximum="60000" FormatString="0" Width="160" HorizontalAlignment="Left"/>
+                            <TextBlock Text="Map Local file (MapLocal action — serves this file as the response)"/>
+                            <TextBox Text="{Binding MapLocalPath}" Watermark="C:\path\to\mock-response.json"/>
+
+                            <Border BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0" Margin="0,6,0,0"/>
+                            <TextBlock Text="HTTP Modifier (ModifyRequest / ModifyResponse) — regex find/replace"
+                                       FontWeight="Bold" Foreground="#FFB0C4DE"/>
+                            <TextBlock Text="Match regexes (optional, one per line — all must match the header block)"/>
+                            <TextBox Text="{Binding MatchRegexText}" AcceptsReturn="True" Height="50"
+                                     FontFamily="Cascadia Mono,Consolas,monospace"
+                                     Watermark="Host:.*example\.com"/>
+                            <TextBlock Text="Header find =&gt; replace (one per line; $1 groups and \r \n \t supported)"/>
+                            <TextBox Text="{Binding HeaderFindReplaceText}" AcceptsReturn="True" Height="60"
+                                     FontFamily="Cascadia Mono,Consolas,monospace"
+                                     Watermark="^Server:.*$ => Server: HttpSpy"/>
+                            <TextBlock Text="Body find =&gt; replace (one per line)"/>
+                            <TextBox Text="{Binding BodyFindReplaceText}" AcceptsReturn="True" Height="60"
+                                     FontFamily="Cascadia Mono,Consolas,monospace"
+                                     Watermark="&quot;debug&quot;:false => &quot;debug&quot;:true"/>
+
+                            <Border BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0" Margin="0,6,0,0"/>
+                            <TextBlock Text="Endpoint redirect (RedirectEndpoint — TCP/IP Redirector)"
+                                       FontWeight="Bold" Foreground="#FFB0C4DE"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBox Text="{Binding RedirectHost}" Width="200" Watermark="127.0.0.1"/>
+                                <NumericUpDown Value="{Binding RedirectPort}" Minimum="0" Maximum="65535" FormatString="0" Width="120"/>
+                            </StackPanel>
+                            <CheckBox Content="Rewrite Host header to the new endpoint" IsChecked="{Binding RewriteHostHeader}"/>
+
+                            <Border BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0" Margin="0,6,0,0"/>
+                            <TextBlock Text="Highlight rule (Highlight action — column + operator)"
+                                       FontWeight="Bold" Foreground="#FFB0C4DE"/>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <ComboBox ItemsSource="{Binding HighlightColumns}" SelectedIndex="{Binding HighlightColumnIndex}" MinWidth="140"/>
+                                <ComboBox ItemsSource="{Binding HighlightOperators}" SelectedIndex="{Binding HighlightOperatorIndex}" MinWidth="120"/>
+                                <TextBox Text="{Binding HighlightValue}" Width="100" Watermark="value"/>
+                                <TextBox Text="{Binding HighlightValue2}" Width="100" Watermark="upper (Between)"/>
+                            </StackPanel>
+                            <TextBlock Text="Highlight color (#AARRGGBB)"/>
+                            <TextBox Text="{Binding HighlightColorHex}" Width="160" HorizontalAlignment="Left"
+                                     FontFamily="Cascadia Mono,Consolas,monospace"/>
+
+                            <Border BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0" Margin="0,6,0,0"/>
+                            <TextBlock Text="Bookmark comment (Bookmark action — auto-bookmark matches)"/>
+                            <TextBox Text="{Binding BookmarkComment}" Watermark="flagged by rule"/>
+
                             <TextBlock Text="{Binding HitCount, StringFormat='Hits: {0}'}" Foreground="#FFB0C4DE"/>
                         </StackPanel>
                     </ScrollViewer>
@@ -208,17 +403,27 @@
 
             <!-- ========== LOG ========== -->
             <TabItem Header="Log">
-                <Border Padding="6">
-                    <ScrollViewer>
-                        <ItemsControl ItemsSource="{Binding LogLines}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding}" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
-                </Border>
+                <DockPanel Margin="6">
+                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                        <Button Content="Clear" Command="{Binding ClearLogCommand}"/>
+                        <Button Content="Copy all" Command="{Binding CopyLogCommand}"/>
+                        <TextBlock VerticalAlignment="Center" Opacity="0.7"
+                                   Text="{Binding LogLines.Count, StringFormat='{}{0} event(s)'}"/>
+                    </StackPanel>
+                    <Border BorderBrush="#33808080" BorderThickness="1" CornerRadius="4">
+                        <ScrollViewer Name="LogScroll" Padding="6">
+                            <ItemsControl ItemsSource="{Binding LogLines}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" TextWrapping="Wrap"
+                                                   Foreground="{Binding Converter={StaticResource LogLineToBrush}}"
+                                                   FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </Border>
+                </DockPanel>
             </TabItem>
         </TabControl>
     </DockPanel>

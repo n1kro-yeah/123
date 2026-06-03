@@ -15,6 +15,7 @@
         <conv:KindToGlyphConverter x:Key="KindToGlyph"/>
         <conv:ByteSizeConverter x:Key="ByteSize"/>
         <conv:StringNotEmptyConverter x:Key="StringNotEmpty"/>
+        <conv:LogLineToBrushConverter x:Key="LogLineToBrush"/>
     </Application.Resources>
 
     <Application.Styles>

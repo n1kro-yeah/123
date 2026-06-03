@@ -111,6 +111,39 @@ public sealed class BoolToTextConverter : IValueConverter
         throw new NotSupportedException();
 }
 
+/// <summary>Tints a diagnostic log line: errors red, warnings amber, "listening" green.</summary>
+public sealed class LogLineToBrushConverter : IValueConverter
+{
+    public static readonly LogLineToBrushConverter Instance = new();
+
+    private static readonly SolidColorBrush Error = new(Color.FromRgb(0xE5, 0x73, 0x73));
+    private static readonly SolidColorBrush Warn = new(Color.FromRgb(0xE6, 0x9F, 0x3A));
+    private static readonly SolidColorBrush Ok = new(Color.FromRgb(0x4C, 0xAF, 0x50));
+    private static readonly SolidColorBrush Info = new(Color.FromRgb(0xBD, 0xBD, 0xBD));
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not string s) return Info;
+        if (s.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("refused", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("exception", StringComparison.OrdinalIgnoreCase))
+            return Error;
+        if (s.Contains("warn", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("retry", StringComparison.OrdinalIgnoreCase))
+            return Warn;
+        if (s.Contains("listening", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("started", StringComparison.OrdinalIgnoreCase) ||
+            s.Contains("stopped", StringComparison.OrdinalIgnoreCase))
+            return Ok;
+        return Info;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
+}
+
 /// <summary>True when a string is non-empty (used for visibility bindings).</summary>
 public sealed class StringNotEmptyConverter : IValueConverter
 {
