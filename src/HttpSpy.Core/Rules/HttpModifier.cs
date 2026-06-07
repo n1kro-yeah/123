@@ -72,9 +72,10 @@ public static class HttpModifier
         try
         {
             updated = Regex.Replace(block, mod.Find, replacement,
-                RegexOptions.IgnoreCase | RegexOptions.Multiline);
+                RegexOptions.IgnoreCase | RegexOptions.Multiline, Rule.RegexTimeout);
         }
         catch (ArgumentException) { return false; }
+        catch (RegexMatchTimeoutException) { return false; }
         if (updated == block) return false;
         ReparseHeaders(headers, updated);
         return true;
@@ -89,9 +90,10 @@ public static class HttpModifier
         try
         {
             updated = Regex.Replace(text, mod.Find, replacement,
-                RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                RegexOptions.IgnoreCase | RegexOptions.Singleline, Rule.RegexTimeout);
         }
         catch (ArgumentException) { return false; }
+        catch (RegexMatchTimeoutException) { return false; }
         if (updated == text) return false;
         result = Bytes.GetBytes(updated);
         return true;

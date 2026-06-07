@@ -124,11 +124,25 @@ public static class SeparateFilesExporter
         int count = 0;
         foreach (var s in sessions)
         {
-            string safeHost = string.Concat((s.Host ?? "session").Split(Path.GetInvalidFileNameChars()));
-            string name = $"{s.Index:D5}_{s.Method}_{safeHost}.txt";
+            // Host and method come straight off the wire, so they may contain
+            // path separators or "..". Sanitize every component (not just the
+            // host) so a captured malicious request can't escape the target
+            // directory via the generated filename (path traversal).
+            string name = $"{s.Index:D5}_{Sanitize(s.Method)}_{Sanitize(s.Host)}.txt";
             File.WriteAllText(Path.Combine(directory, name), RawExporter.ExportRaw(s), Encoding.UTF8);
             count++;
         }
         return count;
+    }
+
+    private static string Sanitize(string? component)
+    {
+        if (string.IsNullOrEmpty(component)) return "session";
+        // Strip invalid filename chars plus the separators that are "valid" on
+        // POSIX but still enable traversal, then collapse any leftover dots.
+        var cleaned = string.Concat(component.Split(Path.GetInvalidFileNameChars()))
+            .Replace('/', '_').Replace('\\', '_');
+        cleaned = cleaned.Trim().Trim('.');
+        return cleaned.Length == 0 ? "session" : cleaned;
     }
 }

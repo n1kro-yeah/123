@@ -23,7 +23,28 @@ public sealed class CertificateAuthority : IDisposable
     {
         _storeDirectory = storeDirectory ?? DefaultStoreDirectory();
         Directory.CreateDirectory(_storeDirectory);
+        RestrictToOwner(_storeDirectory, directory: true);
         RootCertificate = LoadOrCreateRoot();
+    }
+
+    /// <summary>
+    /// Tightens filesystem permissions so only the current user can read a path.
+    /// The store holds the root CA <em>private key</em>; if another local user
+    /// could read it they could mint certificates trusted by this machine, so on
+    /// POSIX systems we drop the group/other bits (no-op on Windows, where the
+    /// per-user profile directory is already access-controlled).
+    /// </summary>
+    private static void RestrictToOwner(string path, bool directory)
+    {
+        if (OperatingSystem.IsWindows()) return;
+        try
+        {
+            var mode = directory
+                ? UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute
+                : UnixFileMode.UserRead | UnixFileMode.UserWrite;
+            File.SetUnixFileMode(path, mode);
+        }
+        catch { /* best effort — never block CA setup on a chmod failure */ }
     }
 
     public X509Certificate2 RootCertificate { get; private set; }
@@ -102,6 +123,7 @@ public sealed class CertificateAuthority : IDisposable
         // Persist a PFX (with key) for ourselves and a DER .cer for the user to trust.
         var pfx = cert.Export(X509ContentType.Pfx, "httpspy");
         File.WriteAllBytes(RootPfxPath, pfx);
+        RestrictToOwner(RootPfxPath, directory: false); // the PFX contains the CA private key
         File.WriteAllBytes(RootCertificatePath, cert.Export(X509ContentType.Cert));
 
         return new X509Certificate2(pfx, "httpspy",

@@ -999,7 +999,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (f.UseRegex)
         {
             try { return System.Text.RegularExpressions.Regex.IsMatch(value, f.Pattern,
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase); }
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase,
+                HttpSpy.Core.Rules.Rule.RegexTimeout); }
             catch { return false; }
         }
         return value.Contains(f.Pattern, StringComparison.OrdinalIgnoreCase);

@@ -167,6 +167,14 @@ public static class HttpWire
         return result;
     }
 
+    /// <summary>
+    /// Upper bound on the size a single decompressed body may reach. Guards
+    /// against "decompression bombs" — a few KB of gzip/deflate/brotli that
+    /// would otherwise inflate to gigabytes and exhaust memory. Bodies that
+    /// exceed this are left in their original (encoded) form.
+    /// </summary>
+    public const long MaxDecompressedBytes = 256L * 1024 * 1024;
+
     /// <summary>Decompresses a body according to its Content-Encoding header.</summary>
     public static byte[] Decompress(byte[] body, string? contentEncoding)
     {
@@ -183,13 +191,32 @@ public static class HttpWire
                 _ => input
             };
             if (ReferenceEquals(decompressor, input)) return body;
-            decompressor.CopyTo(output);
+            CopyBounded(decompressor, output, MaxDecompressedBytes);
             decompressor.Dispose();
             return output.ToArray();
         }
         catch
         {
             return body;
+        }
+    }
+
+    /// <summary>
+    /// Copies <paramref name="source"/> into <paramref name="destination"/>,
+    /// throwing once more than <paramref name="maxBytes"/> have been written so a
+    /// hostile compressed stream cannot inflate without bound.
+    /// </summary>
+    internal static void CopyBounded(Stream source, Stream destination, long maxBytes)
+    {
+        var buffer = new byte[81920];
+        long total = 0;
+        int read;
+        while ((read = source.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            total += read;
+            if (total > maxBytes)
+                throw new InvalidDataException("Decompressed body exceeds the maximum allowed size");
+            destination.Write(buffer, 0, read);
         }
     }
 }
