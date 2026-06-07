@@ -95,6 +95,13 @@ public sealed class Rule
 
     public long HitCount { get; set; }
 
+    /// <summary>
+    /// Caps how long any single user-supplied regex may run against
+    /// attacker-influenced traffic, so a pathological pattern can't hang the
+    /// capture pipeline or UI thread (catastrophic backtracking / ReDoS).
+    /// </summary>
+    public static readonly TimeSpan RegexTimeout = TimeSpan.FromSeconds(2);
+
     private Regex? _compiled;
     private string? _compiledFor;
 
@@ -119,18 +126,24 @@ public sealed class Rule
             case MatchMode.Exact:
                 return string.Equals(url, UrlPattern, StringComparison.OrdinalIgnoreCase);
             case MatchMode.Regex:
-                return GetRegex(UrlPattern).IsMatch(url);
+                return SafeIsMatch(GetRegex(UrlPattern), url);
             case MatchMode.Wildcard:
             default:
-                return GetRegex(WildcardToRegex(UrlPattern)).IsMatch(url);
+                return SafeIsMatch(GetRegex(WildcardToRegex(UrlPattern)), url);
         }
+    }
+
+    private static bool SafeIsMatch(Regex regex, string input)
+    {
+        try { return regex.IsMatch(input); }
+        catch (RegexMatchTimeoutException) { return false; }
     }
 
     private Regex GetRegex(string pattern)
     {
         if (_compiled is null || _compiledFor != pattern)
         {
-            _compiled = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+            _compiled = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
             _compiledFor = pattern;
         }
         return _compiled;
@@ -165,10 +178,12 @@ public sealed class Rule
             if (string.IsNullOrWhiteSpace(pattern)) continue;
             try
             {
-                if (!Regex.IsMatch(rawHeaderBlock, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline))
+                if (!Regex.IsMatch(rawHeaderBlock, pattern,
+                        RegexOptions.IgnoreCase | RegexOptions.Multiline, RegexTimeout))
                     return false;
             }
             catch (ArgumentException) { return false; }
+            catch (RegexMatchTimeoutException) { return false; }
         }
         return true;
     }

@@ -11,13 +11,15 @@ public sealed class StreamReaderEx
 {
     private readonly Stream _stream;
     private readonly byte[] _buffer;
+    private readonly int _maxLineLength;
     private int _pos;
     private int _len;
 
-    public StreamReaderEx(Stream stream, int bufferSize = 16 * 1024)
+    public StreamReaderEx(Stream stream, int bufferSize = 16 * 1024, int maxLineLength = 64 * 1024)
     {
         _stream = stream;
         _buffer = new byte[bufferSize];
+        _maxLineLength = maxLineLength;
     }
 
     public long TotalBytesRead { get; private set; }
@@ -50,6 +52,9 @@ public sealed class StreamReaderEx
                     if (sb.Length > 0 && sb[^1] == '\r') sb.Length--;
                     return sb.ToString();
                 }
+                if (sb.Length >= _maxLineLength)
+                    throw new InvalidDataException(
+                        $"HTTP line exceeds the {_maxLineLength}-byte limit (no CRLF terminator)");
                 sb.Append((char)b);
             }
         }

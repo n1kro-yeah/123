@@ -71,7 +71,7 @@ public static class GrpcDecoder
                 _ => input,
             };
             if (ReferenceEquals(decompressor, input)) return data;
-            decompressor.CopyTo(output);
+            HttpWire.CopyBounded(decompressor, output, HttpWire.MaxDecompressedBytes);
             decompressor.Dispose();
             return output.ToArray();
         }
