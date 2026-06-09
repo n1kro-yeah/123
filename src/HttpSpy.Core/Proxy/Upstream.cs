@@ -55,10 +55,14 @@ public sealed class Upstream
         string negotiated = string.Empty;
         if (tls)
         {
-            var ssl = new SslStream(stream, false, (_, cert, _, _) =>
+            var ssl = new SslStream(stream, false, (_, cert, _, errors) =>
             {
                 if (cert is not null) serverCert = new X509Certificate2(cert);
-                return true; // a debugging proxy accepts upstream certs to remain useful behind interception
+                // A debugging proxy accepts upstream certs by default to remain useful behind
+                // interception / against self-signed origins. Opt in to real validation via options.
+                if (_options.ValidateUpstreamCertificate)
+                    return errors == SslPolicyErrors.None;
+                return true;
             });
             var options = new SslClientAuthenticationOptions
             {

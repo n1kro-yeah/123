@@ -28,12 +28,35 @@ public static class SessionStore
         await JsonSerializer.SerializeAsync(gz, dtos, SerOptions, ct).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Upper bound on the decompressed size of a .hspy file. A .hspy is gzip-compressed
+    /// JSON; without a cap a maliciously crafted file (gzip bomb) could inflate to
+    /// gigabytes and exhaust memory when opened. Real captures stay well under this.
+    /// </summary>
+    public const long MaxDecompressedFileBytes = 512L * 1024 * 1024;
+
     /// <summary>Loads sessions from a .hspy file.</summary>
     public static async Task<List<HttpSession>> LoadAsync(string path, CancellationToken ct = default)
     {
         await using var fs = File.OpenRead(path);
         await using var gz = new GZipStream(fs, CompressionMode.Decompress);
-        var dtos = await JsonSerializer.DeserializeAsync<List<SessionDto>>(gz, SerOptions, ct).ConfigureAwait(false);
+
+        // Decompress into memory with a hard ceiling so a crafted file can't inflate
+        // without bound before we even attempt to deserialize it.
+        using var buffer = new MemoryStream();
+        var chunk = new byte[81920];
+        long total = 0;
+        int read;
+        while ((read = await gz.ReadAsync(chunk, ct).ConfigureAwait(false)) > 0)
+        {
+            total += read;
+            if (total > MaxDecompressedFileBytes)
+                throw new InvalidDataException("Session file is too large or is not a valid .hspy file.");
+            buffer.Write(chunk, 0, read);
+        }
+
+        buffer.Position = 0;
+        var dtos = await JsonSerializer.DeserializeAsync<List<SessionDto>>(buffer, SerOptions, ct).ConfigureAwait(false);
         return dtos?.Select(d => d.ToSession()).ToList() ?? new();
     }
 

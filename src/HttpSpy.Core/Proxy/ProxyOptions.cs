@@ -47,6 +47,15 @@ public sealed class ProxyOptions
 
     public int ConnectTimeoutMs { get; set; } = 15000;
 
+    /// <summary>
+    /// When true, the proxy validates the origin server's TLS certificate and aborts
+    /// the upstream connection on any chain/name/date error. Default <c>false</c>
+    /// preserves debugging-proxy behaviour (accept any upstream cert) so interception
+    /// keeps working against self-signed origins or behind a corporate MITM. Turn this
+    /// on to be alerted when an origin presents an invalid certificate.
+    /// </summary>
+    public bool ValidateUpstreamCertificate { get; set; }
+
     // ---- Network simulation (throttling) ------------------------------------
     /// <summary>When true, responses to the client are rate-limited / delayed to simulate slow links.</summary>
     public bool ThrottleEnabled { get; set; }

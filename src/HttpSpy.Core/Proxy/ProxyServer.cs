@@ -324,9 +324,28 @@ internal sealed class ProxyServer : IDisposable
 
     private static async Task RelayBytesAsync(Stream a, Stream b)
     {
-        var t1 = a.CopyToAsync(b);
-        var t2 = b.CopyToAsync(a);
-        await Task.WhenAny(t1, t2).ConfigureAwait(false);
+        // Tie both copy directions to one token: when either side closes, cancel the
+        // other so it doesn't keep running orphaned until its stream is disposed.
+        using var cts = new CancellationTokenSource();
+        var t1 = CopyDirectionAsync(a, b, cts);
+        var t2 = CopyDirectionAsync(b, a, cts);
+        await Task.WhenAll(t1, t2).ConfigureAwait(false);
+
+        static async Task CopyDirectionAsync(Stream from, Stream to, CancellationTokenSource cts)
+        {
+            try
+            {
+                await from.CopyToAsync(to, cts.Token).ConfigureAwait(false);
+            }
+            catch
+            {
+                // stream closed / cancelled — the tunnel is ending either way
+            }
+            finally
+            {
+                cts.Cancel();
+            }
+        }
     }
 
     // ---- Plain HTTP proxy request -------------------------------------------

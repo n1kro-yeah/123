@@ -104,6 +104,7 @@ public sealed class Rule
 
     private Regex? _compiled;
     private string? _compiledFor;
+    private readonly object _regexGate = new();
 
     public bool Matches(string method, string url, int status)
     {
@@ -141,12 +142,19 @@ public sealed class Rule
 
     private Regex GetRegex(string pattern)
     {
-        if (_compiled is null || _compiledFor != pattern)
+        // A single Rule is matched concurrently from many connection tasks. Guard the
+        // compiled-regex cache so concurrent callers can't observe a torn _compiled/
+        // _compiledFor pair (matching against a regex built for a different pattern) or
+        // thrash the expensive RegexOptions.Compiled rebuild.
+        lock (_regexGate)
         {
-            _compiled = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
-            _compiledFor = pattern;
+            if (_compiled is null || _compiledFor != pattern)
+            {
+                _compiled = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout);
+                _compiledFor = pattern;
+            }
+            return _compiled;
         }
-        return _compiled;
     }
 
     public static string WildcardToRegex(string wildcard)
