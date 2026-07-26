@@ -24,6 +24,15 @@ public sealed class ChartItem
     public long Value { get; }
     public double BarWidth { get; }
     public IBrush Brush { get; }
+
+    /// <summary>
+    /// Pre-formatted value. Count charts leave it null and show the raw number;
+    /// byte and duration charts set it so the axis label carries its unit.
+    /// </summary>
+    public string? ValueText { get; init; }
+
+    /// <summary>What the bar's label column should show.</summary>
+    public string DisplayValue => ValueText ?? Value.ToString("N0");
 }
 
 /// <summary>Aggregated analytics over the captured sessions (charts + totals).</summary>
@@ -61,6 +70,21 @@ public sealed class DashboardViewModel : ViewModelBase
     /// <summary>Requests per time bucket — the "Time Chart" in HTTP Debugger.</summary>
     public ObservableCollection<ChartItem> TimeChart { get; } = new();
 
+    // HTTP Debugger ranks these by *size*, not by count — which is the question
+    // you actually have when a page is slow. Counting says "lots of small JSON";
+    // weighing says "one 4 MB image is the problem".
+    /// <summary>Content types ranked by total bytes transferred.</summary>
+    public ObservableCollection<ChartItem> HeaviestTypes { get; } = new();
+
+    /// <summary>Hosts ranked by total bytes transferred.</summary>
+    public ObservableCollection<ChartItem> HeaviestHosts { get; } = new();
+
+    /// <summary>The individually largest responses in the capture.</summary>
+    public ObservableCollection<ChartItem> LargestRequests { get; } = new();
+
+    /// <summary>The individually slowest responses in the capture.</summary>
+    public ObservableCollection<ChartItem> SlowestRequests { get; } = new();
+
     public void Recompute(IReadOnlyCollection<HttpSession> sessions)
     {
         Total = sessions.Count;
@@ -84,6 +108,68 @@ public sealed class DashboardViewModel : ViewModelBase
             .GroupBy(s => s.ProcessName).Select(g => (g.Key, (long)g.Count()))
             .OrderByDescending(t => t.Item2).Take(8));
         BuildTimeChart(sessions);
+
+        BuildByteBars(HeaviestTypes, sessions
+            .Where(s => !string.IsNullOrEmpty(s.ResponseContentTypeShort))
+            .GroupBy(s => s.ResponseContentTypeShort)
+            .Select(g => (g.Key, g.Sum(s => s.ResponseBodySize)))
+            .Where(t => t.Item2 > 0)
+            .OrderByDescending(t => t.Item2).Take(8));
+
+        BuildByteBars(HeaviestHosts, sessions
+            .Where(s => !string.IsNullOrEmpty(s.Host))
+            .GroupBy(s => s.Host)
+            .Select(g => (g.Key, g.Sum(s => s.ResponseBodySize)))
+            .Where(t => t.Item2 > 0)
+            .OrderByDescending(t => t.Item2).Take(8));
+
+        BuildByteBars(LargestRequests, sessions
+            .Where(s => s.ResponseBodySize > 0)
+            .OrderByDescending(s => s.ResponseBodySize).Take(10)
+            .Select(s => (Label: Shorten(s), s.ResponseBodySize)));
+
+        BuildDurationBars(SlowestRequests, sessions
+            .Where(s => s.DurationMs > 0)
+            .OrderByDescending(s => s.DurationMs).Take(10)
+            .Select(s => (Label: Shorten(s), s.DurationMs)));
+    }
+
+    /// <summary>A compact "host/path" label for a single-session bar.</summary>
+    private static string Shorten(HttpSession s)
+    {
+        var path = string.IsNullOrEmpty(s.Path) ? "/" : s.Path;
+        if (path.Length > 42) path = "…" + path[^41..];
+        return $"{s.Host}{path}";
+    }
+
+    /// <summary>Bars whose value is a byte count, formatted as a size.</summary>
+    private void BuildByteBars(ObservableCollection<ChartItem> target,
+        IEnumerable<(string Label, long Bytes)> data)
+    {
+        target.Clear();
+        var list = data.ToList();
+        long max = list.Count > 0 ? System.Math.Max(1, list.Max(d => d.Bytes)) : 1;
+        int i = 0;
+        foreach (var (label, bytes) in list)
+            target.Add(new ChartItem(label, bytes, (double)bytes / max, Palette[i++ % Palette.Length])
+            {
+                ValueText = Converters.ByteSizeConverter.Format(bytes),
+            });
+    }
+
+    /// <summary>Bars whose value is a duration, formatted as time.</summary>
+    private void BuildDurationBars(ObservableCollection<ChartItem> target,
+        IEnumerable<(string Label, double Ms)> data)
+    {
+        target.Clear();
+        var list = data.ToList();
+        double max = list.Count > 0 ? System.Math.Max(1, list.Max(d => d.Ms)) : 1;
+        int i = 0;
+        foreach (var (label, ms) in list)
+            target.Add(new ChartItem(label, (long)ms, ms / max, Palette[i++ % Palette.Length])
+            {
+                ValueText = Converters.DurationConverter.Format(ms),
+            });
     }
 
     /// <summary>Buckets requests into ~12 equal time slices between first and last capture.</summary>

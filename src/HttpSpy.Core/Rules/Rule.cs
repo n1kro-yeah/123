@@ -257,7 +257,11 @@ public sealed class Rule
 /// <summary>A single header mutation applied by a Modify rule.</summary>
 public sealed class HeaderEdit
 {
-    public enum Op { Set, Remove }
+    /// <summary>
+    /// Set replaces every existing value, Append adds another line (legal for
+    /// repeatable headers such as Set-Cookie or Via), Remove deletes them all.
+    /// </summary>
+    public enum Op { Set, Remove, Append }
 
     public Op Operation { get; set; } = Op.Set;
     public string Name { get; set; } = string.Empty;

@@ -28,6 +28,13 @@ public sealed class ProxyOptions
     public List<string> TlsPassthroughHosts { get; set; } = new();
 
     /// <summary>
+    /// Rules that decide what gets recorded. Unlike display filters these drop a
+    /// transaction before it reaches the session list, so ignored traffic costs
+    /// no memory at all. Traffic is still proxied either way.
+    /// </summary>
+    public List<CaptureFilter> CaptureFilters { get; set; } = new();
+
+    /// <summary>
     /// EXPERIMENTAL, Windows-only. When true, use the WinDivert driver to divert
     /// outbound TCP:80/443 to a local transparent listener with no system-proxy
     /// configuration (the HTTP Debugger "no proxy" capture mode). Requires

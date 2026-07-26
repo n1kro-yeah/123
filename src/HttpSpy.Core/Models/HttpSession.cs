@@ -33,6 +33,25 @@ public sealed class HttpSession
     public int ProcessId { get; set; }
     public string ProcessName { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Identifies the transport connection this transaction travelled on. Several
+    /// transactions share one id when a connection is reused (HTTP keep-alive) or
+    /// multiplexed (HTTP/2), which is what makes the connection tree meaningful.
+    /// </summary>
+    public long ConnectionId { get; set; }
+
+    /// <summary>The HTTP/2 stream id, or 0 for HTTP/1.x where streams do not exist.</summary>
+    public int StreamId { get; set; }
+
+    /// <summary>Sequence of this transaction within its connection, 1-based.</summary>
+    public int ConnectionSequence { get; set; }
+
+    /// <summary>Hands out process-wide unique connection ids.</summary>
+    private static long _connectionCounter;
+
+    public static long NextConnectionId() =>
+        System.Threading.Interlocked.Increment(ref _connectionCounter);
+
     // ---- Request -------------------------------------------------------------
     public string Method { get; set; } = "GET";
     public string Url { get; set; } = string.Empty;
@@ -130,6 +149,12 @@ public sealed class HttpSession
     /// <summary>True when this session was produced by the Submitter / replay.</summary>
     public bool IsReplay { get; set; }
 
+    /// <summary>
+    /// True when a capture filter excluded this transaction from recording. The
+    /// proxy still relays it normally; it just never reaches the session list.
+    /// </summary>
+    public bool Suppressed { get; set; }
+
     // ---- Derived display helpers --------------------------------------------
     public long RequestBodySize => RequestBody.LongLength;
     public long ResponseBodySize => ResponseBody.LongLength;
@@ -159,6 +184,22 @@ public sealed class HttpSession
 
     public double DurationMs =>
         EndTime.HasValue ? (EndTime.Value - StartTime).TotalMilliseconds : Timings.TotalMs;
+
+    /// <summary>
+    /// Effective download throughput in bytes/second, measured over the whole
+    /// transaction. Returns 0 when there is nothing to measure — a duration of
+    /// zero would otherwise produce infinity.
+    /// </summary>
+    public double SpeedBytesPerSecond
+    {
+        get
+        {
+            double ms = DurationMs;
+            if (ms <= 0) return 0;
+            long wire = EncodedBodySize > 0 ? EncodedBodySize : ResponseBodySize;
+            return wire / (ms / 1000.0);
+        }
+    }
 
     public string StatusDisplay => StatusCode > 0 ? $"{StatusCode} {StatusText}".Trim() : (Error is null ? "—" : "ERR");
 

@@ -35,6 +35,7 @@
         <KeyBinding Gesture="Ctrl+D4" Command="{Binding SelectTabCommand}" CommandParameter="3"/>
         <KeyBinding Gesture="Ctrl+D5" Command="{Binding SelectTabCommand}" CommandParameter="4"/>
         <KeyBinding Gesture="Ctrl+D6" Command="{Binding SelectTabCommand}" CommandParameter="5"/>
+        <KeyBinding Gesture="Ctrl+D7" Command="{Binding SelectTabCommand}" CommandParameter="6"/>
     </Window.KeyBindings>
 
     <DockPanel>
@@ -88,14 +89,19 @@
                     <MenuItem Header="Size" ToggleType="CheckBox" IsChecked="{Binding ShowSizeColumn, Mode=TwoWay}"/>
                     <MenuItem Header="Time" ToggleType="CheckBox" IsChecked="{Binding ShowTimeColumn, Mode=TwoWay}"/>
                     <MenuItem Header="Process" ToggleType="CheckBox" IsChecked="{Binding ShowProcessColumn, Mode=TwoWay}"/>
+                    <Separator/>
+                    <MenuItem Header="Speed" ToggleType="CheckBox" IsChecked="{Binding ShowSpeedColumn, Mode=TwoWay}"/>
+                    <MenuItem Header="Server IP" ToggleType="CheckBox" IsChecked="{Binding ShowServerColumn, Mode=TwoWay}"/>
+                    <MenuItem Header="Connection" ToggleType="CheckBox" IsChecked="{Binding ShowConnectionColumn, Mode=TwoWay}"/>
                 </MenuItem>
                 <Separator/>
                 <MenuItem Header="Capture" Command="{Binding SelectTabCommand}" CommandParameter="0" InputGesture="Ctrl+1"/>
-                <MenuItem Header="Dashboard" Command="{Binding SelectTabCommand}" CommandParameter="1" InputGesture="Ctrl+2"/>
-                <MenuItem Header="Analysis" Command="{Binding SelectTabCommand}" CommandParameter="2" InputGesture="Ctrl+3"/>
-                <MenuItem Header="Submitter" Command="{Binding SelectTabCommand}" CommandParameter="3" InputGesture="Ctrl+4"/>
-                <MenuItem Header="Rules" Command="{Binding SelectTabCommand}" CommandParameter="4" InputGesture="Ctrl+5"/>
-                <MenuItem Header="Log" Command="{Binding SelectTabCommand}" CommandParameter="5" InputGesture="Ctrl+6"/>
+                <MenuItem Header="Structure" Command="{Binding SelectTabCommand}" CommandParameter="1" InputGesture="Ctrl+2"/>
+                <MenuItem Header="Dashboard" Command="{Binding SelectTabCommand}" CommandParameter="2" InputGesture="Ctrl+3"/>
+                <MenuItem Header="Analysis" Command="{Binding SelectTabCommand}" CommandParameter="3" InputGesture="Ctrl+4"/>
+                <MenuItem Header="Submitter" Command="{Binding SelectTabCommand}" CommandParameter="4" InputGesture="Ctrl+5"/>
+                <MenuItem Header="Rules" Command="{Binding SelectTabCommand}" CommandParameter="5" InputGesture="Ctrl+6"/>
+                <MenuItem Header="Log" Command="{Binding SelectTabCommand}" CommandParameter="6" InputGesture="Ctrl+7"/>
                 <Separator/>
                 <MenuItem Header="Auto-scroll" ToggleType="CheckBox" IsChecked="{Binding AutoScroll, Mode=TwoWay}"/>
                 <MenuItem Header="Dark theme" ToggleType="CheckBox" IsChecked="{Binding IsDarkTheme, Mode=TwoWay}"/>
@@ -118,6 +124,11 @@
                 <MenuItem Header="Options / Network simulation…" Command="{Binding OpenOptionsCommand}"/>
                 <MenuItem Header="Display filters…" Command="{Binding OpenFiltersCommand}"/>
                 <MenuItem Header="Converter (URL / Base64 / Hex / JSON)…" Command="{Binding OpenConverterCommand}"/>
+                <MenuItem Header="Regular expression tester…" Command="{Binding OpenRegexTesterCommand}"/>
+                <MenuItem Header="Capture filters…" Command="{Binding OpenCaptureFiltersCommand}"/>
+                <Separator/>
+                <MenuItem Header="Export settings and rules…" Command="{Binding ExportSettingsCommand}"/>
+                <MenuItem Header="Import settings and rules…" Command="{Binding ImportSettingsCommand}"/>
                 <Separator/>
                 <MenuItem Header="Mark selected as compare baseline" Command="{Binding MarkForCompareCommand}"/>
                 <MenuItem Header="Compare selected with baseline" Command="{Binding CompareWithBaselineCommand}"/>
@@ -137,6 +148,11 @@
              simply unreachable. This reflows instead of clipping. -->
         <Border DockPanel.Dock="Top" Classes="toolbar">
             <WrapPanel Classes="spaced">
+                <!-- One primary action, then grouped dropdowns. The previous row
+                     had 15 loose controls and overflowed the default window; the
+                     port spinner and the two capture toggles in particular are
+                     set once and then never touched, so they belong behind a
+                     menu rather than competing with Start/Stop for attention. -->
                 <Button Command="{Binding ToggleCaptureCommand}" MinWidth="132"
                         Classes.primary="{Binding !IsCapturing}"
                         Classes.recording="{Binding IsCapturing}"
@@ -157,26 +173,38 @@
 
                 <Border Classes="vsep"/>
 
-                <Button Content="Open" Command="{Binding OpenSessionCommand}"
-                        ToolTip.Tip="Open a saved .hspy capture  (Ctrl+O)"/>
-                <Button Content="Save" Command="{Binding SaveSessionCommand}"
-                        ToolTip.Tip="Save this capture to a .hspy file  (Ctrl+S)"/>
-                <Button Content="Export HAR" Command="{Binding ExportHarCommand}"
-                        ToolTip.Tip="Export every session to a standard HAR 1.2 archive"/>
+                <DropDownButton Content="Session ▾" ToolTip.Tip="Open, save and export the capture">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Header="Open session…" Command="{Binding OpenSessionCommand}"
+                                      InputGesture="Ctrl+O"/>
+                            <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}"
+                                      InputGesture="Ctrl+S"/>
+                            <Separator/>
+                            <MenuItem Header="Export HAR 1.2…" Command="{Binding ExportHarCommand}"/>
+                            <MenuItem Header="Export CSV…" Command="{Binding ExportCsvCommand}"/>
+                            <MenuItem Header="Export JSON…" Command="{Binding ExportJsonCommand}"/>
+                            <MenuItem Header="Export XML…" Command="{Binding ExportXmlCommand}"/>
+                            <MenuItem Header="Export plain text…" Command="{Binding ExportTxtCommand}"/>
+                            <MenuItem Header="One raw file per session…"
+                                      Command="{Binding ExportSeparateFilesCommand}"/>
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
 
-                <Border Classes="vsep"/>
-
-                <TextBlock Text="Port" VerticalAlignment="Center" Classes="muted"/>
-                <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"
-                               FormatString="0" Width="108" Increment="1" ShowButtonSpinner="False"
-                               ToolTip.Tip="TCP port the proxy listens on (default 8888). Takes effect the next time you start the capture."/>
-
-                <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}"
-                          ToolTip.Tip="MITM-decrypt HTTPS. Requires the HttpSpy root certificate to be trusted."/>
-                <CheckBox Content="System proxy" IsChecked="{Binding SetSystemProxy}"
-                          ToolTip.Tip="Point the Windows system proxy at HttpSpy while capturing"/>
-
-                <Border Classes="vsep"/>
+                <DropDownButton Content="Capture ▾" ToolTip.Tip="Listener port, decryption and what gets recorded">
+                    <DropDownButton.Flyout>
+                        <MenuFlyout>
+                            <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox"
+                                      IsChecked="{Binding DecryptHttps, Mode=TwoWay}"/>
+                            <MenuItem Header="Set the system proxy while capturing" ToggleType="CheckBox"
+                                      IsChecked="{Binding SetSystemProxy, Mode=TwoWay}"/>
+                            <Separator/>
+                            <MenuItem Header="Capture filters…" Command="{Binding OpenCaptureFiltersCommand}"/>
+                            <MenuItem Header="Options / network simulation…" Command="{Binding OpenOptionsCommand}"/>
+                        </MenuFlyout>
+                    </DropDownButton.Flyout>
+                </DropDownButton>
 
                 <Button Classes="primary" Command="{Binding Analysis.RunAnalysisCommand}"
                         ToolTip.Tip="Scan the capture for security, performance and correctness issues  (Ctrl+Shift+A)">
@@ -185,6 +213,8 @@
                         <TextBlock Text="Analyse"/>
                     </StackPanel>
                 </Button>
+
+                <Border Classes="vsep"/>
 
                 <DropDownButton Content="Certificate ▾"
                                 ToolTip.Tip="Trust, export or inspect the HttpSpy root certificate">
@@ -199,28 +229,39 @@
                     </DropDownButton.Flyout>
                 </DropDownButton>
 
-                <Button Content="⚙" Command="{Binding OpenOptionsCommand}" MinWidth="36"
-                        ToolTip.Tip="Options: network simulation, upstream proxy, TLS passthrough"/>
                 <Button Content="◑" Command="{Binding ToggleThemeCommand}" MinWidth="36"
                         ToolTip.Tip="Toggle dark / light theme"/>
-
-                <Border Classes="pill" VerticalAlignment="Center"
-                        Background="{DynamicResource SpySurfaceRaisedBrush}"
-                        ToolTip.Tip="HTTPS decryption only works once the HttpSpy root CA is trusted by the client">
-                    <TextBlock Text="{Binding CertStatus}"
-                               Classes.success="{Binding IsCertTrusted}"
-                               Classes.warning="{Binding !IsCertTrusted}"/>
-                </Border>
             </WrapPanel>
         </Border>
 
         <!-- ================= Status bar ================= -->
         <Border DockPanel.Dock="Bottom" Classes="statusbar">
-            <Grid ColumnDefinitions="*,Auto">
+            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
                 <TextBlock Grid.Column="0" Text="{Binding StatusText}"
                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                <TextBlock Grid.Column="1" Text="{Binding StatsText}" Classes="mono muted"
-                           VerticalAlignment="Center" Margin="16,0,0,0"/>
+
+                <!-- Listener port and certificate trust are state, not actions, so
+                     they live here rather than taking up room in the toolbar. The
+                     port stays directly editable because it is the one setting a
+                     new user is most likely to need. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="16,0,0,0"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Port" Classes="muted" VerticalAlignment="Center"/>
+                    <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"
+                                   FormatString="0" Width="96" Increment="1" ShowButtonSpinner="False"
+                                   FontSize="12" Padding="6,1"
+                                   ToolTip.Tip="TCP port the proxy listens on. Takes effect the next time you start the capture."/>
+                </StackPanel>
+
+                <Border Grid.Column="2" Classes="pill" Margin="12,0,0,0"
+                        ToolTip.Tip="HTTPS decryption only works once the HttpSpy root CA is trusted by the client">
+                    <TextBlock Text="{Binding CertStatus}"
+                               Classes.success="{Binding IsCertTrusted}"
+                               Classes.warning="{Binding !IsCertTrusted}"/>
+                </Border>
+
+                <TextBlock Grid.Column="3" Text="{Binding StatsText}" Classes="mono muted"
+                           VerticalAlignment="Center" Margin="14,0,0,0"/>
             </Grid>
         </Border>
 
@@ -235,37 +276,63 @@
                          row pushed Find/Bookmark past the right edge of the window. -->
                     <Border Grid.Row="0" Classes="chrome" BorderThickness="0,0,0,1" Padding="10,7">
                         <WrapPanel Classes="spaced">
+                            <!-- The quick filters HTTP Debugger puts on its toolbar.
+                                 Three checkboxes that used to sit here moved into
+                                 the "⋯" menu: they are set once per session, while
+                                 these dropdowns are used constantly. -->
                             <TextBox x:Name="FilterBox" Text="{Binding FilterText}"
-                                     Watermark="Filter: url, host, method, status, process   (Ctrl+F)"
-                                     Width="330"/>
+                                     Watermark="Filter: url, host, method, status   (Ctrl+F)"
+                                     Width="270"/>
+                            <ComboBox ItemsSource="{Binding TypeFilters}" SelectedItem="{Binding TypeFilter}"
+                                      Width="130" ToolTip.Tip="Show only one class of content — data, page assets or streaming"/>
+                            <ComboBox ItemsSource="{Binding HostFilters}" SelectedItem="{Binding HostFilter}"
+                                      Width="170" ToolTip.Tip="Show only one host (populated from the capture)"/>
+                            <ComboBox ItemsSource="{Binding ProcessFilters}" SelectedItem="{Binding ProcessFilter}"
+                                      Width="140" ToolTip.Tip="Show only one originating process"/>
                             <ComboBox ItemsSource="{Binding MethodFilters}" SelectedItem="{Binding MethodFilter}"
-                                      Width="104" ToolTip.Tip="Show only one HTTP method"/>
+                                      Width="96" ToolTip.Tip="Show only one HTTP method"/>
                             <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnly}"
                                       ToolTip.Tip="Show only 4xx / 5xx responses and failed transactions"/>
-                            <CheckBox Content="Search bodies" IsChecked="{Binding SearchBodies}"
-                                      ToolTip.Tip="Also match the filter text inside request/response bodies (slower)"/>
-                            <CheckBox Content="Auto-scroll" IsChecked="{Binding AutoScroll}"
-                                      ToolTip.Tip="Follow live capture by scrolling to each new session"/>
 
                             <Border Classes="vsep"/>
 
-                            <TextBlock Text="Group" VerticalAlignment="Center" Classes="muted"/>
-                            <ComboBox ItemsSource="{Binding GroupByOptions}" SelectedItem="{Binding GroupBy}"
-                                      Width="118" ToolTip.Tip="Collapse the grid into a tree grouped by a column"/>
-                            <Button Content="Filters…" Command="{Binding OpenFiltersCommand}"
-                                    ToolTip.Tip="Stacked show/hide filter rules (persisted between runs)"/>
-
-                            <Border Classes="vsep"/>
-
-                            <TextBox x:Name="SearchBox" Text="{Binding AdvancedSearchText}" Width="200"
+                            <TextBox x:Name="SearchBox" Text="{Binding AdvancedSearchText}" Width="180"
                                      Watermark="Search headers + bodies   (Ctrl+Shift+F)"
                                      ToolTip.Tip="Full-text search across the URL, headers and bodies of every session"/>
                             <Button Content="Find next" Command="{Binding FindNextCommand}"
                                     ToolTip.Tip="Jump to the next matching session  (F3)"/>
-                            <Button Content="★ Next" Command="{Binding NextBookmarkCommand}"
-                                    ToolTip.Tip="Jump to the next bookmarked session"/>
                             <TextBlock Text="{Binding AdvancedSearchStatus}" VerticalAlignment="Center"
-                                       Classes="muted" MinWidth="76"/>
+                                       Classes="muted" MinWidth="70"/>
+
+                            <Border Classes="vsep"/>
+
+                            <DropDownButton Content="⋯" MinWidth="34"
+                                            ToolTip.Tip="Grouping, stacked filter rules and view options">
+                                <DropDownButton.Flyout>
+                                    <MenuFlyout>
+                                        <MenuItem Header="Search inside bodies" ToggleType="CheckBox"
+                                                  IsChecked="{Binding SearchBodies, Mode=TwoWay}"/>
+                                        <MenuItem Header="Auto-scroll to newest" ToggleType="CheckBox"
+                                                  IsChecked="{Binding AutoScroll, Mode=TwoWay}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Group by">
+                                            <MenuItem Header="None" Command="{Binding SetGroupByCommand}" CommandParameter="None"/>
+                                            <MenuItem Header="Host" Command="{Binding SetGroupByCommand}" CommandParameter="Host"/>
+                                            <MenuItem Header="Process" Command="{Binding SetGroupByCommand}" CommandParameter="Process"/>
+                                            <MenuItem Header="Method" Command="{Binding SetGroupByCommand}" CommandParameter="Method"/>
+                                            <MenuItem Header="Status" Command="{Binding SetGroupByCommand}" CommandParameter="Status"/>
+                                            <MenuItem Header="Content type" Command="{Binding SetGroupByCommand}" CommandParameter="ContentType"/>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <MenuItem Header="Display filter rules…" Command="{Binding OpenFiltersCommand}"/>
+                                        <MenuItem Header="Capture filter rules…" Command="{Binding OpenCaptureFiltersCommand}"/>
+                                        <MenuItem Header="Next bookmark" Command="{Binding NextBookmarkCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Clear all filters" Command="{Binding ClearAllFiltersCommand}"
+                                                  InputGesture="Ctrl+Shift+L"/>
+                                    </MenuFlyout>
+                                </DropDownButton.Flyout>
+                            </DropDownButton>
                         </WrapPanel>
                     </Border>
 
@@ -421,6 +488,10 @@
                                                         Binding="{Binding DurationMs, Converter={StaticResource Duration}}"
                                                         Width="82"/>
                                     <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="122"/>
+                                    <DataGridTextColumn Header="Speed" Width="92"
+                                                        Binding="{Binding SpeedBytesPerSecond, Converter={StaticResource ByteSize}, StringFormat='{}{0}/s'}"/>
+                                    <DataGridTextColumn Header="Server" Binding="{Binding RemoteAddress}" Width="126"/>
+                                    <DataGridTextColumn Header="Conn" Binding="{Binding ConnectionLabel}" Width="76"/>
                                 </DataGrid.Columns>
                             </DataGrid>
 
@@ -452,6 +523,11 @@
                         </Border>
                     </Grid>
                 </Grid>
+            </TabItem>
+
+            <!-- ========== STRUCTURE ========== -->
+            <TabItem Header="Structure">
+                <ContentControl Content="{Binding Structure}"/>
             </TabItem>
 
             <!-- ========== DASHBOARD ========== -->
@@ -488,6 +564,8 @@
                             <Button Content="Remove" Classes="danger" Command="{Binding RemoveRuleCommand}"/>
                             <Button Classes="primary" Content="Apply" Command="{Binding ApplyRulesCommand}"
                                     ToolTip.Tip="Push the rule set to the live capture engine and save it"/>
+                            <Button Content="Defaults" Classes="ghost" Command="{Binding RestoreDefaultRulesCommand}"
+                                    ToolTip.Tip="Restore the shipped highlight rules for errors, slow and large responses"/>
                         </StackPanel>
                         <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}">
                             <ListBox.ItemTemplate>

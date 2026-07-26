@@ -109,9 +109,7 @@ internal sealed class ProxyServer : IDisposable
             if (_redirector?.TryGetOriginalDestination(srcPort, out _, out var op) == true)
                 originalPort = op;
 
-            (int pid, string name) origin = Options.ResolveProcess
-                ? _engine.ProcessResolver.Resolve(srcPort)
-                : (0, string.Empty);
+            var conn = ClientConnection.Accept(client, _engine);
 
             var stream = client.GetStream();
 
@@ -126,7 +124,7 @@ internal sealed class ProxyServer : IDisposable
             {
                 string host = TlsClientHello.TryParseSni(prefix) ?? "unknown";
                 int port = originalPort == 0 ? 443 : originalPort;
-                await RunTlsMitmAsync(prefixed, host, port, origin).ConfigureAwait(false);
+                await RunTlsMitmAsync(prefixed, host, port, conn).ConfigureAwait(false);
             }
             else
             {
@@ -139,7 +137,7 @@ internal sealed class ProxyServer : IDisposable
                     var req = await HttpWire.ReadRequestHeadAsync(reader, _ct).ConfigureAwait(false);
                     if (req is null) break;
                     string host = req.Headers["Host"] ?? "unknown";
-                    keepAlive = await ProcessRequestAsync(req, reader, prefixed, "http", host, port, origin)
+                    keepAlive = await ProcessRequestAsync(req, reader, prefixed, "http", host, port, conn)
                         .ConfigureAwait(false);
                 }
             }
@@ -185,9 +183,7 @@ internal sealed class ProxyServer : IDisposable
             client.NoDelay = true;
             if (client.Client.RemoteEndPoint is IPEndPoint rep) clientPort = rep.Port;
 
-            (int pid, string name) origin = Options.ResolveProcess
-                ? _engine.ProcessResolver.Resolve(clientPort)
-                : (0, string.Empty);
+            var conn = ClientConnection.Accept(client, _engine);
 
             using var stream = client.GetStream();
             var reader = new StreamReaderEx(stream);
@@ -201,11 +197,11 @@ internal sealed class ProxyServer : IDisposable
 
                 if (string.Equals(head.Method, "CONNECT", StringComparison.OrdinalIgnoreCase))
                 {
-                    await HandleConnectAsync(head, reader, stream, origin).ConfigureAwait(false);
+                    await HandleConnectAsync(head, reader, stream, conn).ConfigureAwait(false);
                     break; // CONNECT consumes the connection
                 }
 
-                keepAlive = await HandlePlainRequestAsync(head, reader, stream, origin).ConfigureAwait(false);
+                keepAlive = await HandlePlainRequestAsync(head, reader, stream, conn).ConfigureAwait(false);
             }
         }
         catch (Exception ex)
@@ -221,7 +217,7 @@ internal sealed class ProxyServer : IDisposable
 
     // ---- HTTPS via CONNECT ---------------------------------------------------
     private async Task HandleConnectAsync(HttpWire.RequestHead head, StreamReaderEx reader,
-        Stream clientStream, (int pid, string name) origin)
+        Stream clientStream, ClientConnection conn)
     {
         var (host, port) = SplitHostPort(head.Target, 443);
 
@@ -239,11 +235,11 @@ internal sealed class ProxyServer : IDisposable
 
         if (passthrough)
         {
-            await TunnelOpaqueAsync(host, port, reader, clientStream, origin).ConfigureAwait(false);
+            await TunnelOpaqueAsync(host, port, reader, clientStream, conn).ConfigureAwait(false);
             return;
         }
 
-        await RunTlsMitmAsync(clientStream, host, port, origin).ConfigureAwait(false);
+        await RunTlsMitmAsync(clientStream, host, port, conn).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -253,7 +249,7 @@ internal sealed class ProxyServer : IDisposable
     /// by the explicit-proxy CONNECT path and the transparent-capture listener.
     /// </summary>
     private async Task RunTlsMitmAsync(Stream clientStream, string host, int port,
-        (int pid, string name) origin)
+        ClientConnection conn)
     {
         SslStream sslClient;
         X509Certificate2 leaf;
@@ -295,7 +291,7 @@ internal sealed class ProxyServer : IDisposable
 
             if (sslClient.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2)
             {
-                var h2 = new Http2.Http2Connection(_engine, _upstream, sslClient, host, port, origin, _ct);
+                var h2 = new Http2.Http2Connection(_engine, _upstream, sslClient, host, port, conn, _ct);
                 await h2.RunAsync().ConfigureAwait(false);
                 return;
             }
@@ -307,22 +303,23 @@ internal sealed class ProxyServer : IDisposable
                 sslReader.Mark();
                 var req = await HttpWire.ReadRequestHeadAsync(sslReader, _ct).ConfigureAwait(false);
                 if (req is null) break;
-                keepAlive = await ProcessRequestAsync(req, sslReader, sslClient, "https", host, port, origin)
+                keepAlive = await ProcessRequestAsync(req, sslReader, sslClient, "https", host, port, conn)
                     .ConfigureAwait(false);
             }
         }
     }
 
     private async Task TunnelOpaqueAsync(string host, int port, StreamReaderEx reader, Stream clientStream,
-        (int pid, string name) origin)
+        ClientConnection conn)
     {
         var session = new HttpSession
         {
             Kind = SessionKind.Tunnel, IsTls = true, Method = "CONNECT",
             Host = host, RemotePort = port, Scheme = "https",
-            Url = $"{host}:{port}", ProcessId = origin.pid, ProcessName = origin.name,
+            Url = $"{host}:{port}",
             State = SessionState.SentToServer
         };
+        conn.Stamp(session);
         _engine.RaiseStarted(session);
 
         try
@@ -365,7 +362,7 @@ internal sealed class ProxyServer : IDisposable
 
     // ---- Plain HTTP proxy request -------------------------------------------
     private async Task<bool> HandlePlainRequestAsync(HttpWire.RequestHead head, StreamReaderEx reader,
-        Stream clientStream, (int pid, string name) origin)
+        Stream clientStream, ClientConnection conn)
     {
         string scheme = "http";
         string host;
@@ -387,16 +384,16 @@ internal sealed class ProxyServer : IDisposable
             port = hp.port;
         }
 
-        return await ProcessRequestAsync(head, reader, clientStream, scheme, host, port, origin)
+        return await ProcessRequestAsync(head, reader, clientStream, scheme, host, port, conn)
             .ConfigureAwait(false);
     }
 
     // ---- The shared request pipeline ----------------------------------------
     private async Task<bool> ProcessRequestAsync(HttpWire.RequestHead head, StreamReaderEx reader,
-        Stream clientStream, string scheme, string host, int port, (int pid, string name) origin)
+        Stream clientStream, string scheme, string host, int port, ClientConnection conn)
     {
         var sw = Stopwatch.StartNew();
-        var session = BuildSession(head, scheme, host, port, origin);
+        var session = BuildSession(head, scheme, host, port, conn);
 
         bool requestBodyForbidden = string.Equals(head.Method, "TRACE", StringComparison.OrdinalIgnoreCase);
         var requestBody = await HttpWire
@@ -488,6 +485,13 @@ internal sealed class ProxyServer : IDisposable
         using (up)
         {
             session.Timings.ConnectMs = sw.Elapsed.TotalMilliseconds - connectStart;
+
+            // Which backend answered is worth knowing for a load-balanced host.
+            if (up.Tcp.Client.RemoteEndPoint is System.Net.IPEndPoint peer)
+            {
+                session.RemoteAddress = peer.Address.ToString();
+                conn.RemoteAddress = session.RemoteAddress;
+            }
 
             var upstreamHeaders = BuildUpstreamHeaders(session, head, isWebSocket);
 
@@ -673,7 +677,7 @@ internal sealed class ProxyServer : IDisposable
 
     // ---- Helpers -------------------------------------------------------------
     private HttpSession BuildSession(HttpWire.RequestHead head, string scheme, string host, int port,
-        (int pid, string name) origin)
+        ClientConnection conn)
     {
         string path = head.Target;
         string query = string.Empty;
@@ -692,11 +696,10 @@ internal sealed class ProxyServer : IDisposable
             QueryString = query,
             HttpVersion = head.Version,
             RequestHeaders = head.Headers.Clone(),
-            ProcessId = origin.pid,
-            ProcessName = origin.name,
             State = SessionState.RequestReceived,
             StartTime = DateTime.Now,
         };
+        conn.Stamp(session);
         session.Url = session.FullUrl;
         return session;
     }

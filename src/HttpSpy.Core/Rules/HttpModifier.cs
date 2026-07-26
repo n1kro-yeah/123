@@ -123,7 +123,7 @@ public static class HttpModifier
     }
 
     /// <summary>Turns the literal escapes <c>\r \n \t</c> in a replacement into control chars.</summary>
-    internal static string TranslateEscapes(string value)
+    public static string TranslateEscapes(string value)
     {
         if (value.IndexOf('\\') < 0) return value;
         var sb = new StringBuilder(value.Length);

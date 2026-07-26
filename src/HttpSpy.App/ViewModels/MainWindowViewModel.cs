@@ -87,6 +87,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Analysis.NavigateToSessionRequested += OnNavigateToSession;
         Analysis.ExportRequested += ExportAnalysisReportAsync;
 
+        Structure.SessionSource = () => AllSessions.Select(v => v.Model).ToList();
+        Structure.NavigateToSessionRequested += OnNavigateToSessionModel;
+
         _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(750) };
         _statsTimer.Tick += (_, _) => UpdateStats();
         _statsTimer.Start();
@@ -99,6 +102,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         LoadRules();
         foreach (var f in _settings.Filters) Filters.Add(f.Clone());
+        foreach (var f in _settings.CaptureFilters) CaptureFilters.Add(f.Clone());
 
         var hidden = _settings.HiddenColumns;
         ShowProtoColumn = !hidden.Contains("Proto");
@@ -107,6 +111,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ShowSizeColumn = !hidden.Contains("Size");
         ShowTimeColumn = !hidden.Contains("Time");
         ShowProcessColumn = !hidden.Contains("Process");
+        // These three are off by default: useful when you need them, noise otherwise.
+        ShowSpeedColumn = _settings.ShownColumns.Contains("Speed");
+        ShowServerColumn = _settings.ShownColumns.Contains("Server");
+        ShowConnectionColumn = _settings.ShownColumns.Contains("Conn");
         _columnsLoaded = true;
     }
 
@@ -123,6 +131,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Raised when the user opens the Filters dialog.</summary>
     public event Action? FiltersRequested;
 
+    /// <summary>Raised when the user opens the capture-filter editor.</summary>
+    public event Action? CaptureFiltersRequested;
+
+    /// <summary>Raised when the user opens the regular-expression tester.</summary>
+    public event Action? RegexTesterRequested;
+
+    /// <summary>Capture-level rules that drop traffic before it is recorded.</summary>
+    public ObservableCollection<CaptureFilter> CaptureFilters { get; } = new();
+
     public string[] FilterFields { get; } =
         { "URL", "Host", "Method", "Status", "ContentType", "Process", "AnyHeader", "Body" };
 
@@ -130,6 +147,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public DashboardViewModel Dashboard { get; } = new();
     public SubmitterViewModel Submitter { get; } = new();
     public AnalysisViewModel Analysis { get; } = new();
+    public StructureViewModel Structure { get; } = new();
 
     // ---- Capture state -------------------------------------------------------
     [ObservableProperty] private bool _isCapturing;
@@ -172,6 +190,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private bool _showSizeColumn = true;
     [ObservableProperty] private bool _showTimeColumn = true;
     [ObservableProperty] private bool _showProcessColumn = true;
+    [ObservableProperty] private bool _showSpeedColumn;
+    [ObservableProperty] private bool _showServerColumn;
+    [ObservableProperty] private bool _showConnectionColumn;
 
     /// <summary>Raised when a grid column is shown/hidden so the view can apply it.</summary>
     public event Action? ColumnVisibilityChanged;
@@ -182,6 +203,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     partial void OnShowSizeColumnChanged(bool value) => OnColumnToggled();
     partial void OnShowTimeColumnChanged(bool value) => OnColumnToggled();
     partial void OnShowProcessColumnChanged(bool value) => OnColumnToggled();
+    partial void OnShowSpeedColumnChanged(bool value) => OnColumnToggled();
+    partial void OnShowServerColumnChanged(bool value) => OnColumnToggled();
+    partial void OnShowConnectionColumnChanged(bool value) => OnColumnToggled();
 
     private bool _columnsLoaded;
     private void OnColumnToggled()
@@ -199,6 +223,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ["Size"] = ShowSizeColumn,
         ["Time"] = ShowTimeColumn,
         ["Process"] = ShowProcessColumn,
+        ["Speed"] = ShowSpeedColumn,
+        ["Server"] = ShowServerColumn,
+        ["Conn"] = ShowConnectionColumn,
     };
 
     // ---- Filtering -----------------------------------------------------------
@@ -209,9 +236,99 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     public string[] MethodFilters { get; } = { "All", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS" };
 
+    // ---- Quick filters (HTTP Debugger's toolbar dropdowns) -------------------
+    /// <summary>
+    /// Content-type buckets, grouped the way a developer thinks about a capture
+    /// rather than by exact MIME string: data payloads, page assets, streaming.
+    /// </summary>
+    public string[] TypeFilters { get; } =
+    {
+        "All types",
+        "— Data —", "JSON", "XML", "Form data",
+        "— Page —", "HTML", "Script", "Style", "Image", "Font",
+        "— Other —", "Text", "Binary",
+        "— Streaming —", "WebSocket", "SSE", "gRPC",
+    };
+
+    [ObservableProperty] private string _typeFilter = "All types";
+
+    /// <summary>Hosts present in the capture, newest first, for the Host dropdown.</summary>
+    public ObservableCollection<string> HostFilters { get; } = new() { AllHosts };
+
+    /// <summary>Originating processes present in the capture.</summary>
+    public ObservableCollection<string> ProcessFilters { get; } = new() { AllProcesses };
+
+    private const string AllHosts = "All hosts";
+    private const string AllProcesses = "All processes";
+
+    [ObservableProperty] private string _hostFilter = AllHosts;
+    [ObservableProperty] private string _processFilter = AllProcesses;
+
+    partial void OnTypeFilterChanged(string value)
+    {
+        // The separator entries are labels, not selections.
+        if (value.StartsWith('—')) { TypeFilter = "All types"; return; }
+        RequestRefresh();
+    }
+
+    partial void OnHostFilterChanged(string value) => RequestRefresh();
+    partial void OnProcessFilterChanged(string value) => RequestRefresh();
+
+    /// <summary>Keeps the Host/Process dropdowns in step with what has been captured.</summary>
+    private void TrackQuickFilterValues(SessionViewModel vm)
+    {
+        var host = vm.Model.Host;
+        if (!string.IsNullOrEmpty(host) && !HostFilters.Contains(host))
+        {
+            // Insert alphabetically after the "All" entry so the list stays scannable.
+            int at = 1;
+            while (at < HostFilters.Count &&
+                   string.Compare(HostFilters[at], host, StringComparison.OrdinalIgnoreCase) < 0) at++;
+            HostFilters.Insert(at, host);
+        }
+
+        var process = vm.Model.ProcessName;
+        if (!string.IsNullOrEmpty(process) && !ProcessFilters.Contains(process))
+            ProcessFilters.Add(process);
+    }
+
+    /// <summary>True when the session's response falls into the selected type bucket.</summary>
+    private bool MatchesTypeFilter(SessionViewModel vm)
+    {
+        if (TypeFilter is "All types" || TypeFilter.StartsWith('—')) return true;
+
+        var m = vm.Model;
+        var media = m.ResponseContentTypeShort;
+
+        return TypeFilter switch
+        {
+            "JSON" => media.Contains("json", StringComparison.OrdinalIgnoreCase),
+            "XML" => media.Contains("xml", StringComparison.OrdinalIgnoreCase),
+            "Form data" => (m.RequestHeaders["Content-Type"] ?? "")
+                .Contains("form", StringComparison.OrdinalIgnoreCase),
+            "HTML" => media.Contains("html", StringComparison.OrdinalIgnoreCase),
+            "Script" => media.Contains("javascript", StringComparison.OrdinalIgnoreCase) ||
+                        media.Contains("ecmascript", StringComparison.OrdinalIgnoreCase),
+            "Style" => media.Contains("css", StringComparison.OrdinalIgnoreCase),
+            "Image" => media.StartsWith("image/", StringComparison.OrdinalIgnoreCase),
+            "Font" => media.StartsWith("font/", StringComparison.OrdinalIgnoreCase) ||
+                      media.Contains("woff", StringComparison.OrdinalIgnoreCase),
+            "Text" => media.StartsWith("text/", StringComparison.OrdinalIgnoreCase),
+            "Binary" => m.ResponseBodyKind == BodyContentType.Binary,
+            "WebSocket" => m.Kind == SessionKind.WebSocket,
+            "SSE" => m.Kind == SessionKind.ServerSentEvents,
+            "gRPC" => media.Contains("grpc", StringComparison.OrdinalIgnoreCase),
+            _ => true,
+        };
+    }
+
     // ---- Grouping (tree list mode) ------------------------------------------
     [ObservableProperty] private string _groupBy = "None";
     public string[] GroupByOptions { get; } = { "None", "Host", "Process", "Method", "Status", "ContentType" };
+
+    /// <summary>Sets the grouping from the menu (which cannot bind a ComboBox).</summary>
+    [RelayCommand]
+    private void SetGroupBy(string value) => GroupBy = value;
 
     partial void OnGroupByChanged(string value)
     {
@@ -262,6 +379,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var vm = new SessionViewModel(s);
         _index[s.Id] = vm;
         AllSessions.Add(vm);
+        TrackQuickFilterValues(vm);
         TrimToSessionLimit();
         if (AutoScroll) SessionAppended?.Invoke(vm);
     });
@@ -408,6 +526,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         CompareBaseline = null;
         Inspector.Session = null;
         _droppedSessions = 0;
+
+        HostFilters.Clear(); HostFilters.Add(AllHosts); HostFilter = AllHosts;
+        ProcessFilters.Clear(); ProcessFilters.Add(AllProcesses); ProcessFilter = AllProcesses;
+
         StatusText = "Capture cleared";
     }
 
@@ -637,6 +759,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         FilterText = "";
         ErrorsOnly = false;
         MethodFilter = "All";
+        TypeFilter = "All types";
+        HostFilter = AllHosts;
+        ProcessFilter = AllProcesses;
         Filters.Clear();
         ApplyFilters();
         StatusText = "Filters cleared";
@@ -738,6 +863,101 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void OpenConverter() => ConverterRequested?.Invoke();
 
     [RelayCommand]
+    private void OpenCaptureFilters() => CaptureFiltersRequested?.Invoke();
+
+    [RelayCommand]
+    private void OpenRegexTester() => RegexTesterRequested?.Invoke();
+
+    [RelayCommand]
+    private void AddCaptureFilter() =>
+        CaptureFilters.Add(new CaptureFilter { Field = CaptureFilterField.Host, Exclude = true });
+
+    [RelayCommand]
+    private void RemoveCaptureFilter(CaptureFilter? filter)
+    {
+        if (filter is not null) CaptureFilters.Remove(filter);
+    }
+
+    /// <summary>Pushes capture filters to the live engine and persists them.</summary>
+    public void ApplyCaptureFilters()
+    {
+        _engine.Options.CaptureFilters = CaptureFilters.Select(f => f.Clone()).ToList();
+        PersistSettings();
+        int active = CaptureFilters.Count(f => f.Enabled && !string.IsNullOrWhiteSpace(f.Pattern));
+        StatusText = active == 0
+            ? "Capture filters cleared — everything will be recorded"
+            : $"{active} capture filter(s) active";
+    }
+
+    /// <summary>Writes the whole configuration to a file so it can be shared or restored.</summary>
+    [RelayCommand]
+    private async Task ExportSettings()
+    {
+        if (Dialogs is null) return;
+        var path = await Dialogs.SaveFileAsync("Export settings", "httpspy-settings.json",
+            new[] { ("HttpSpy settings", "json") });
+        if (path is null) return;
+
+        try
+        {
+            PersistSettings();
+            var bundle = SettingsStore.ExportBundle(
+                HttpSpySettings.FromOptions(_engine.Options), Rules.Select(r => r.Rule));
+            await File.WriteAllTextAsync(path, bundle);
+            StatusText = $"Settings and rules exported to {path}";
+        }
+        catch (Exception ex) { await Dialogs.ShowMessageAsync("Export failed", ex.Message); }
+    }
+
+    /// <summary>Restores a previously exported configuration bundle.</summary>
+    [RelayCommand]
+    private async Task ImportSettings()
+    {
+        if (Dialogs is null) return;
+        var path = await Dialogs.OpenFileAsync("Import settings", new[] { ("HttpSpy settings", "json") });
+        if (path is null) return;
+
+        if (!await Dialogs.ConfirmAsync("Import settings",
+                "This replaces your current options, rules and filters. Continue?"))
+            return;
+
+        try
+        {
+            var (settings, rules) = SettingsStore.ImportBundle(await File.ReadAllTextAsync(path));
+
+            settings.ApplyTo(_engine.Options);
+            ListenPort = settings.ListenPort;
+            DecryptHttps = settings.DecryptHttps;
+            SetSystemProxy = settings.SetSystemProxy;
+            EnableHttp2 = settings.EnableHttp2;
+            TransparentCapture = settings.TransparentCapture;
+            ThrottleEnabled = settings.ThrottleEnabled;
+            ThrottleKbps = settings.ThrottleKbps;
+            ExtraLatencyMs = settings.ExtraLatencyMs;
+            AutoScroll = settings.AutoScroll;
+            IsDarkTheme = !string.Equals(settings.Theme, "Light", StringComparison.OrdinalIgnoreCase);
+            UpstreamProxy = string.IsNullOrEmpty(settings.UpstreamProxyHost)
+                ? "" : $"{settings.UpstreamProxyHost}:{settings.UpstreamProxyPort}";
+            PassthroughHosts = string.Join(Environment.NewLine, settings.TlsPassthroughHosts);
+
+            Filters.Clear();
+            foreach (var f in settings.Filters) Filters.Add(f.Clone());
+
+            CaptureFilters.Clear();
+            foreach (var f in settings.CaptureFilters) CaptureFilters.Add(f.Clone());
+
+            Rules.Clear();
+            foreach (var r in rules) Rules.Add(new RuleViewModel(r));
+
+            ApplyRules();
+            ApplyCaptureFilters();
+            ApplyFilters();
+            StatusText = $"Imported {rules.Count} rule(s) and {settings.Filters.Count} filter(s) from {path}";
+        }
+        catch (Exception ex) { await Dialogs.ShowMessageAsync("Import failed", ex.Message); }
+    }
+
+    [RelayCommand]
     private void AddFilter() => Filters.Add(new DisplayFilter { Field = "URL", Pattern = "" });
 
     [RelayCommand]
@@ -766,9 +986,10 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     partial void OnActiveTabIndexChanged(int value)
     {
-        // The dashboard aggregates the whole capture, so recompute it lazily when
-        // the tab is actually shown rather than on every captured transaction.
+        // These aggregate the whole capture, so recompute lazily when the tab is
+        // actually shown rather than on every captured transaction.
         if (value == TabDashboard) Dashboard.Recompute(AllSessions.Select(v => v.Model).ToList());
+        else if (value == TabStructure) Structure.Rebuild();
     }
 
     [RelayCommand]
@@ -780,18 +1001,30 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     /// <summary>Tab indices, kept in one place so shortcuts and code agree.</summary>
     public const int TabCapture = 0;
-    public const int TabDashboard = 1;
-    public const int TabAnalysis = 2;
-    public const int TabSubmitter = 3;
-    public const int TabRules = 4;
-    public const int TabLog = 5;
-    private const int TabCount = 6;
+    public const int TabStructure = 1;
+    public const int TabDashboard = 2;
+    public const int TabAnalysis = 3;
+    public const int TabSubmitter = 4;
+    public const int TabRules = 5;
+    public const int TabLog = 6;
+    private const int TabCount = 7;
 
     /// <summary>Switches the main tab (used by the Ctrl+1..6 keyboard shortcuts).</summary>
     [RelayCommand]
     private void SelectTab(string index)
     {
         if (int.TryParse(index, out var i) && i >= 0 && i < TabCount) ActiveTabIndex = i;
+    }
+
+    /// <summary>Selects a session by identity and reveals it in the grid.</summary>
+    private void OnNavigateToSessionModel(HttpSession session)
+    {
+        var match = AllSessions.FirstOrDefault(v => ReferenceEquals(v.Model, session));
+        if (match is null) { StatusText = "That session is no longer in the capture"; return; }
+        ActiveTabIndex = TabCapture;
+        SelectedSession = match;
+        SessionAppended?.Invoke(match);
+        StatusText = $"Jumped to session #{match.Index}";
     }
 
     /// <summary>Selects the session with the given grid index and reveals it.</summary>
@@ -1135,14 +1368,75 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (persisted.Count > 0)
             foreach (var r in persisted) Rules.Add(new RuleViewModel(r));
         else
-            Rules.Add(new RuleViewModel(new Rule
-            {
-                Name = "Highlight server errors", Action = RuleAction.Highlight,
-                UrlMatchMode = MatchMode.Wildcard, UrlPattern = "*", StatusFilter = null,
-                HighlightColor = 0xFFFFE0E0, Enabled = false
-            }));
+            foreach (var r in DefaultRules()) Rules.Add(new RuleViewModel(r));
+
         _engine.Rules.SetRules(Rules.Select(r => r.Rule));
         foreach (var r in Rules) r.RefreshSummary();
+    }
+
+    /// <summary>
+    /// The rule set a fresh install starts with. Errors, slow responses and
+    /// oversized payloads are highlighted out of the box: previously the only
+    /// seeded rule was disabled, so the highlighting engine looked broken until
+    /// the user happened to author a rule themselves.
+    /// </summary>
+    public static IEnumerable<Rule> DefaultRules() => new[]
+    {
+        new Rule
+        {
+            Name = "Server errors (5xx)",
+            Action = RuleAction.Highlight,
+            UrlMatchMode = MatchMode.Wildcard, UrlPattern = "*",
+            HighlightColumn = HighlightColumn.Status,
+            HighlightOperator = HighlightOperator.IsBigger,
+            HighlightValue = "499",
+            HighlightColor = 0xFFE5484A,
+        },
+        new Rule
+        {
+            Name = "Client errors (4xx)",
+            Action = RuleAction.Highlight,
+            UrlMatchMode = MatchMode.Wildcard, UrlPattern = "*",
+            HighlightColumn = HighlightColumn.Status,
+            HighlightOperator = HighlightOperator.IsBetween,
+            HighlightValue = "400", HighlightValue2 = "499",
+            HighlightColor = 0xFFE16F24,
+        },
+        new Rule
+        {
+            Name = "Slow responses (over 2 s)",
+            Action = RuleAction.Highlight,
+            UrlMatchMode = MatchMode.Wildcard, UrlPattern = "*",
+            HighlightColumn = HighlightColumn.Duration,
+            HighlightOperator = HighlightOperator.IsBigger,
+            HighlightValue = "2000",
+            HighlightColor = 0xFFD4A72C,
+        },
+        new Rule
+        {
+            Name = "Large responses (over 2 MB)",
+            Action = RuleAction.Highlight,
+            UrlMatchMode = MatchMode.Wildcard, UrlPattern = "*",
+            HighlightColumn = HighlightColumn.ResponseSize,
+            HighlightOperator = HighlightOperator.IsBigger,
+            HighlightValue = "2097152",
+            HighlightColor = 0xFF8B5CF6,
+        },
+    };
+
+    /// <summary>Restores the shipped rule set, replacing whatever is configured.</summary>
+    [RelayCommand]
+    private async Task RestoreDefaultRules()
+    {
+        if (Dialogs is not null &&
+            !await Dialogs.ConfirmAsync("Restore default rules",
+                "Replace the current rule set with the shipped defaults? Your rules will be lost."))
+            return;
+
+        Rules.Clear();
+        foreach (var r in DefaultRules()) Rules.Add(new RuleViewModel(r));
+        ApplyRules();
+        StatusText = "Default rules restored";
     }
 
     // ---- Options -------------------------------------------------------------
@@ -1194,6 +1488,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             s.AutoScroll = AutoScroll;
             s.Filters = Filters.Select(f => f.Clone()).ToList();
             s.HiddenColumns = ColumnVisibility.Where(kv => !kv.Value).Select(kv => kv.Key).ToList();
+            s.ShownColumns = ColumnVisibility.Where(kv => kv.Value).Select(kv => kv.Key).ToList();
+            s.CaptureFilters = _engine.Options.CaptureFilters.Select(f => f.Clone()).ToList();
             SettingsStore.SaveSettings(s);
         }
         catch { /* ignore persistence errors */ }
@@ -1205,6 +1501,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (ErrorsOnly && !vm.Model.IsError) return false;
         if (MethodFilter != "All" && !string.Equals(vm.Method, MethodFilter, StringComparison.OrdinalIgnoreCase))
             return false;
+        if (HostFilter != AllHosts && !string.Equals(vm.Host, HostFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (ProcessFilter != AllProcesses &&
+            !string.Equals(vm.ProcessName, ProcessFilter, StringComparison.OrdinalIgnoreCase))
+            return false;
+        if (!MatchesTypeFilter(vm)) return false;
         if (!string.IsNullOrWhiteSpace(FilterText))
         {
             var f = FilterText.Trim();

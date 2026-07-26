@@ -13,6 +13,9 @@ public sealed class ProxyStatistics
     public long Errors;
     public long WebSocketSessions;
 
+    /// <summary>Transactions dropped by a capture filter rather than recorded.</summary>
+    public long SuppressedSessions;
+
     public ProxyStatistics Snapshot() => (ProxyStatistics)MemberwiseClone();
 }
 
@@ -128,19 +131,37 @@ public sealed class ProxyEngine : IDisposable
     // ---- Internal raise helpers (called by ProxyServer) ----------------------
     internal void RaiseStarted(HttpSession s)
     {
+        // Capture filters are applied here, at the one point every transaction
+        // passes through, so a dropped session never allocates a view model or
+        // retains its bodies. The flag is remembered so the later Completed /
+        // Updated events for the same transaction stay consistent.
+        if (!CaptureFilterSet.ShouldRecord(Options.CaptureFilters, s))
+        {
+            s.Suppressed = true;
+            Interlocked.Increment(ref Statistics.SuppressedSessions);
+            return;
+        }
+
         Interlocked.Increment(ref Statistics.TotalSessions);
         SessionStarted?.Invoke(s);
     }
 
     internal void RaiseCompleted(HttpSession s)
     {
+        // Byte counters still tally suppressed traffic: it did cross the wire,
+        // and the status bar would otherwise under-report throughput.
         Interlocked.Add(ref Statistics.BytesSent, s.BytesSent);
         Interlocked.Add(ref Statistics.BytesReceived, s.BytesReceived);
         if (s.Error is not null) Interlocked.Increment(ref Statistics.Errors);
+        if (s.Suppressed) return;
         SessionCompleted?.Invoke(s);
     }
 
-    internal void RaiseUpdated(HttpSession s) => SessionUpdated?.Invoke(s);
+    internal void RaiseUpdated(HttpSession s)
+    {
+        if (s.Suppressed) return;
+        SessionUpdated?.Invoke(s);
+    }
 
     internal void RaiseLog(string message) => Log?.Invoke(message);
 

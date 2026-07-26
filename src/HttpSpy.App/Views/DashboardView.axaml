@@ -89,6 +89,64 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
+            <TextBlock Text="Heaviest content types (by bytes)" Classes="section"/>
+            <ItemsControl ItemsSource="{Binding HeaviestTypes}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="230,Auto,*" Margin="0,2">
+                            <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <Rectangle Grid.Column="1" Height="18" HorizontalAlignment="Left"
+                                       Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
+                            <TextBlock Grid.Column="2" Text="{Binding DisplayValue}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Heaviest hosts (by bytes)" Classes="section"/>
+            <ItemsControl ItemsSource="{Binding HeaviestHosts}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="230,Auto,*" Margin="0,2">
+                            <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <Rectangle Grid.Column="1" Height="18" HorizontalAlignment="Left"
+                                       Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
+                            <TextBlock Grid.Column="2" Text="{Binding DisplayValue}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Largest individual responses" Classes="section"/>
+            <ItemsControl ItemsSource="{Binding LargestRequests}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="340,Auto,*" Margin="0,2">
+                            <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" FontSize="12"/>
+                            <Rectangle Grid.Column="1" Height="16" HorizontalAlignment="Left"
+                                       Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
+                            <TextBlock Grid.Column="2" Text="{Binding DisplayValue}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <TextBlock Text="Slowest individual responses" Classes="section"/>
+            <ItemsControl ItemsSource="{Binding SlowestRequests}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid ColumnDefinitions="340,Auto,*" Margin="0,2">
+                            <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" FontSize="12"/>
+                            <Rectangle Grid.Column="1" Height="16" HorizontalAlignment="Left"
+                                       Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
+                            <TextBlock Grid.Column="2" Text="{Binding DisplayValue}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
             <TextBlock Text="Requests over time" Classes="section"/>
             <ItemsControl ItemsSource="{Binding TimeChart}">
                 <ItemsControl.ItemsPanel>

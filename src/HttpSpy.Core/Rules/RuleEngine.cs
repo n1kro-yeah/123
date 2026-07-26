@@ -243,8 +243,21 @@ public sealed class RuleEngine
     {
         foreach (var edit in edits)
         {
-            if (edit.Operation == HeaderEdit.Op.Remove) headers.Remove(edit.Name);
-            else headers.Set(edit.Name, edit.Value);
+            if (string.IsNullOrWhiteSpace(edit.Name)) continue;
+            switch (edit.Operation)
+            {
+                case HeaderEdit.Op.Remove:
+                    headers.Remove(edit.Name);
+                    break;
+                case HeaderEdit.Op.Append:
+                    // Repeatable headers (Set-Cookie, Via, Warning) need a second
+                    // line rather than a replacement.
+                    headers.Add(edit.Name, edit.Value);
+                    break;
+                default:
+                    headers.Set(edit.Name, edit.Value);
+                    break;
+            }
         }
     }
 }

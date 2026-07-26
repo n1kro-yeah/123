@@ -24,6 +24,19 @@ public sealed class SessionViewModel : ObservableObject
     public double DurationMs => Model.DurationMs;
     public string ProcessName => Model.ProcessName;
     public int ProcessId => Model.ProcessId;
+
+    /// <summary>Effective transfer rate, for the Speed column.</summary>
+    public double SpeedBytesPerSecond => Model.SpeedBytesPerSecond;
+
+    /// <summary>Which backend answered — useful behind a load balancer or CDN.</summary>
+    public string RemoteAddress => Model.RemoteAddress;
+
+    /// <summary>Transport connection identity, shown as "connection · stream".</summary>
+    public string ConnectionLabel => Model.StreamId > 0
+        ? $"{Model.ConnectionId}·{Model.StreamId}"
+        : Model.ConnectionId > 0
+            ? Model.ConnectionId.ToString()
+            : string.Empty;
     public string StartTime => Model.StartTime.ToString("HH:mm:ss.fff");
     public bool Bookmarked => Model.Bookmarked;
     public uint HighlightColor => Model.HighlightColor;
@@ -104,6 +117,9 @@ public sealed class SessionViewModel : ObservableObject
         OnPropertyChanged(nameof(IsError));
         OnPropertyChanged(nameof(Comment));
         OnPropertyChanged(nameof(ProcessName));
+        OnPropertyChanged(nameof(SpeedBytesPerSecond));
+        OnPropertyChanged(nameof(RemoteAddress));
+        OnPropertyChanged(nameof(ConnectionLabel));
         OnPropertyChanged(nameof(Url));
         OnPropertyChanged(nameof(PathAndQuery));
     }

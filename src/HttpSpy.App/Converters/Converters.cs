@@ -64,6 +64,14 @@ public sealed class HighlightToBrushConverter : IValueConverter
     // to sit behind the text, so they are re-published at a low alpha.
     private readonly Dictionary<uint, IBrush> _cache = new();
 
+    /// <summary>
+    /// Ceiling on row-tint opacity. Highlight rules commonly match a large share
+    /// of a capture — 4xx responses are routine while debugging — so a heavy fill
+    /// turns the whole grid into a wall of colour and fights the text for
+    /// attention. A tint is enough to make a row findable while scrolling.
+    /// </summary>
+    private const byte MaxTintAlpha = 0x2E;
+
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {
         if (value is not uint argb || argb == 0) return Palette.Transparent;
@@ -73,7 +81,7 @@ public sealed class HighlightToBrushConverter : IValueConverter
             if (_cache.TryGetValue(argb, out var cached)) return cached;
 
             var color = Color.FromUInt32(argb);
-            var soft = Color.FromArgb(Math.Min(color.A, (byte)0x50), color.R, color.G, color.B);
+            var soft = Color.FromArgb(Math.Min(color.A, MaxTintAlpha), color.R, color.G, color.B);
             var brush = new SolidColorBrush(soft).ToImmutable();
 
             // Bound the cache: a regex highlight rule could in principle produce
@@ -317,4 +325,18 @@ public sealed class CountToBoolConverter : IValueConverter
 
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         throw new NotSupportedException();
+}
+
+/// <summary>
+/// Maps a boolean onto a two-item ComboBox index, inverted: index 0 = true.
+/// Used by the capture-filter editor, where "Drop" (Exclude = true) reads much
+/// better as the first entry than a bare checkbox labelled "Exclude".
+/// </summary>
+public sealed class InvertedBoolIndexConverter : IValueConverter
+{
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is true ? 0 : 1;
+
+    public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        value is int i && i == 0;
 }

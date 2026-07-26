@@ -51,6 +51,8 @@ public partial class MainWindow : Window, IDialogService
             _vm.OptionsRequested -= OnOptionsRequested;
             _vm.FiltersRequested -= OnFiltersRequested;
             _vm.ConverterRequested -= OnConverterRequested;
+            _vm.CaptureFiltersRequested -= OnCaptureFiltersRequested;
+            _vm.RegexTesterRequested -= OnRegexTesterRequested;
             _vm.ColumnVisibilityChanged -= ApplyColumnVisibility;
             _vm.LogLines.CollectionChanged -= OnLogLinesChanged;
         }
@@ -63,6 +65,8 @@ public partial class MainWindow : Window, IDialogService
             _vm.OptionsRequested += OnOptionsRequested;
             _vm.FiltersRequested += OnFiltersRequested;
             _vm.ConverterRequested += OnConverterRequested;
+            _vm.CaptureFiltersRequested += OnCaptureFiltersRequested;
+            _vm.RegexTesterRequested += OnRegexTesterRequested;
             _vm.ColumnVisibilityChanged += ApplyColumnVisibility;
             ApplyColumnVisibility();
         }
@@ -102,6 +106,15 @@ public partial class MainWindow : Window, IDialogService
     }
 
     private void OnConverterRequested() => new ConverterWindow().ShowDialog(this);
+
+    private void OnCaptureFiltersRequested()
+    {
+        if (_vm is not null) new CaptureFiltersWindow(_vm).ShowDialog(this);
+    }
+
+    // Modeless: the point of the tester is to keep it open beside the rule editor
+    // while iterating on a pattern.
+    private void OnRegexTesterRequested() => new RegexTesterWindow().Show(this);
 
     /// <summary>Keeps the diagnostic log pinned to the latest entry as events arrive.</summary>
     private void OnLogLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)

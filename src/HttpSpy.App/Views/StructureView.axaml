@@ -1,0 +1,97 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
+             x:Class="HttpSpy.App.Views.StructureView"
+             x:DataType="vm:StructureViewModel"
+             x:Name="StructureRoot">
+
+    <DockPanel>
+        <Border DockPanel.Dock="Top" Classes="toolbar">
+            <WrapPanel Classes="spaced">
+                <ComboBox ItemsSource="{Binding Modes}" SelectedIndex="{Binding ModeIndex}" MinWidth="160"
+                          ToolTip.Tip="Site structure folds requests into a host/path tree. Connections shows how they were multiplexed."/>
+                <Button Content="↻ Rebuild" Command="{Binding RebuildCommand}"/>
+                <CheckBox Content="Group ids" IsChecked="{Binding CollapseIdentifiers}"
+                          IsVisible="{Binding IsStructureMode}"
+                          ToolTip.Tip="Collapse numeric and UUID path segments, so /users/1 and /users/2 share one node"/>
+            </WrapPanel>
+        </Border>
+
+        <Border DockPanel.Dock="Bottom" Classes="statusbar">
+            <TextBlock Text="{Binding Summary}" Classes="muted"/>
+        </Border>
+
+        <Panel>
+            <!-- ===== Site structure ===== -->
+            <DockPanel IsVisible="{Binding IsStructureMode}">
+                <Grid DockPanel.Dock="Top" Classes="chrome" ColumnDefinitions="*,90,100,90,110"
+                      Margin="0" Height="26">
+                    <TextBlock Grid.Column="0" Text="Host / path" Classes="muted" Margin="30,0,0,0"
+                               VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="1" Text="Requests" Classes="muted" TextAlignment="Right"
+                               VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="2" Text="Transferred" Classes="muted" TextAlignment="Right"
+                               VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="3" Text="Average" Classes="muted" TextAlignment="Right"
+                               VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="4" Text="Issues" Classes="muted" TextAlignment="Right"
+                               VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" Margin="0,0,10,0"/>
+                </Grid>
+
+                <TreeView ItemsSource="{Binding Roots}" Padding="4">
+                    <TreeView.ItemTemplate>
+                        <TreeDataTemplate ItemsSource="{Binding Children}">
+                            <Grid ColumnDefinitions="*,90,100,90,110" Margin="0,1"
+                                  ToolTip.Tip="{Binding Tooltip}"
+                                  DoubleTapped="Node_DoubleTapped">
+                                <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="7">
+                                    <TextBlock Text="{Binding Glyph}" Classes="faint" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding Display}" VerticalAlignment="Center"/>
+                                    <!-- Relative weight of the whole subtree, so the
+                                         heaviest branch is obvious without reading numbers. -->
+                                    <Rectangle Height="6" RadiusX="2" RadiusY="2" VerticalAlignment="Center"
+                                               Width="{Binding BarWidth}" Opacity="0.55"
+                                               Fill="{DynamicResource SpyAccentBrush}"/>
+                                </StackPanel>
+                                <TextBlock Grid.Column="1" Text="{Binding RequestsText}" Classes="mono"
+                                           TextAlignment="Right" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="2" Text="{Binding BytesText}" Classes="mono"
+                                           TextAlignment="Right" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="3" Text="{Binding AverageText}" Classes="mono"
+                                           TextAlignment="Right" VerticalAlignment="Center"/>
+                                <TextBlock Grid.Column="4" Text="{Binding ProblemsText}" Classes="mono danger"
+                                           TextAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0"
+                                           IsVisible="{Binding HasProblems}"/>
+                            </Grid>
+                        </TreeDataTemplate>
+                    </TreeView.ItemTemplate>
+                </TreeView>
+            </DockPanel>
+
+            <!-- ===== Connections ===== -->
+            <TreeView ItemsSource="{Binding Connections}" Padding="8"
+                      IsVisible="{Binding IsConnectionMode}">
+                <TreeView.ItemTemplate>
+                    <TreeDataTemplate ItemsSource="{Binding Children}">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2"
+                                    ToolTip.Tip="{Binding Tooltip}" DoubleTapped="Connection_DoubleTapped">
+                            <TextBlock Text="{Binding Glyph}" Classes="accent" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding Display}" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding Detail}" Classes="mono faint" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </TreeDataTemplate>
+                </TreeView.ItemTemplate>
+            </TreeView>
+
+            <!-- ===== Empty state ===== -->
+            <StackPanel Classes="empty-state" IsVisible="{Binding !HasContent}">
+                <TextBlock Text="⑃" Classes="glyph"/>
+                <TextBlock Text="Nothing to lay out yet" Classes="title"/>
+                <TextBlock Text="Capture some traffic and this tab folds it into a host and path tree — with per-branch request counts, transferred bytes, average timing and error tallies — or groups it by the transport connection to show how HTTP/2 multiplexed it."/>
+            </StackPanel>
+        </Panel>
+    </DockPanel>
+</UserControl>

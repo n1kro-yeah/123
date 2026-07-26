@@ -27,7 +27,7 @@ internal sealed class Http2Connection
     private readonly Stream _client;
     private readonly string _host;
     private readonly int _port;
-    private readonly (int pid, string name) _origin;
+    private readonly ClientConnection _conn;
     private readonly CancellationToken _ct;
 
     private readonly Http2Writer _writer;
@@ -49,14 +49,14 @@ internal sealed class Http2Connection
     }
 
     public Http2Connection(ProxyEngine engine, Upstream upstream, Stream client,
-        string host, int port, (int pid, string name) origin, CancellationToken ct)
+        string host, int port, ClientConnection conn, CancellationToken ct)
     {
         _engine = engine;
         _upstream = upstream;
         _client = client;
         _host = host;
         _port = port;
-        _origin = origin;
+        _conn = conn;
         _ct = ct;
         _writer = new Http2Writer(client);
     }
@@ -236,7 +236,7 @@ internal sealed class Http2Connection
             }
 
             var (host, port) = SplitHostPort(authority, _port);
-            var session = BuildSession(method, scheme, host, port, path, requestHeaders, body);
+            var session = BuildSession(method, scheme, host, port, path, requestHeaders, body, streamId);
             _engine.RaiseStarted(session);
 
             var decision = _engine.Rules.EvaluateRequest(session);
@@ -300,6 +300,15 @@ internal sealed class Http2Connection
         using var up = await _upstream.ConnectAsync(connectHost, connectPort, tls: true, _ct, alpn).ConfigureAwait(false);
         session.Timings.ConnectMs = sw.Elapsed.TotalMilliseconds;
         session.State = SessionState.SentToServer;
+
+        // The h2 path has its own upstream connect, so it has to record the peer
+        // address itself — otherwise the Server column was blank for every
+        // HTTP/2 transaction while HTTP/1.1 rows showed one.
+        if (up.Tcp.Client.RemoteEndPoint is System.Net.IPEndPoint peer)
+        {
+            session.RemoteAddress = peer.Address.ToString();
+            _conn.RemoteAddress = session.RemoteAddress;
+        }
 
         if (up.NegotiatedProtocol == "h2")
             await ForwardOverHttp2Async(streamId, session, method, path, authority, scheme, up, sw).ConfigureAwait(false);
@@ -430,7 +439,7 @@ internal sealed class Http2Connection
     }
 
     private HttpSession BuildSession(string method, string scheme, string host, int port, string fullPath,
-        HeaderCollection headers, byte[] body)
+        HeaderCollection headers, byte[] body, int streamId)
     {
         string path = fullPath;
         string query = string.Empty;
@@ -450,11 +459,12 @@ internal sealed class Http2Connection
             HttpVersion = "HTTP/2",
             RequestHeaders = headers,
             RequestBody = body,
-            ProcessId = _origin.pid,
-            ProcessName = _origin.name,
             State = SessionState.RequestReceived,
             StartTime = DateTime.Now,
         };
+        // Stamping the stream id is what lets the UI show how these requests
+        // were multiplexed over the single h2 connection.
+        _conn.Stamp(session, streamId);
         session.Url = session.FullUrl;
         return session;
     }

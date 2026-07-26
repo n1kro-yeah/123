@@ -9,8 +9,9 @@ and can be developed and demoed on Linux/macOS.
 
 ![HttpSpy capture grid](docs/capture.png)
 
-*Live capture: HTTP/1.1 and HTTP/2 side by side, status-coded rows, and the
-decrypted response body rendered as a JSON tree.*
+*Live capture: HTTP/1.1 and HTTP/2 side by side, status-coded rows tinted by the
+default highlight rules, quick filters for type/host/process, and the decrypted
+response inspected below.*
 
 ## Features
 
@@ -40,12 +41,26 @@ decrypted response body rendered as a JSON tree.*
   (GPRS / 2G / 3G / DSL / Wi-Fi) in the Options dialog.
 - **Dashboard:** status-code distribution, top hosts, content types and method
   breakdown, plus totals (requests, bytes, average time, errors, HTTPS count).
+- **Structure tree:** the whole capture folded into a host → path hierarchy,
+  with per-branch request counts, transferred bytes, average timing and error
+  tallies; identifier-shaped path segments collapse so a REST API reads as
+  `/users/{id}` instead of a thousand leaves.
+- **Connection view:** transactions grouped by the transport connection that
+  carried them, distinguishing genuine HTTP/2 multiplexing (overlapping streams)
+  from ordinary keep-alive reuse.
+- **Quick filters:** content-type class (data / page assets / streaming), host
+  and originating process, populated live from the capture.
+- **Capture filters:** rules that stop a transaction being *recorded* at all —
+  unlike display filters, ignored traffic costs no memory, which is what makes a
+  long unattended capture practical.
 - **Traffic analysis:** a one-click audit of the whole capture — 40+ checks
   across security, privacy, performance, caching, correctness, compatibility
   and API design — with a 0–100 health score, per-category scores, deduplicated
   findings, the evidence that triggered each one, and the fix. See below.
 - **Code generation** from any session: cURL, C#, Python, JavaScript,
   PowerShell and `.http` (VS Code REST Client / JetBrains HTTP client).
+- **Portable configuration:** export and import options, rules and filters as a
+  single JSON bundle, so a working setup can be shared or committed.
 - **Export / persistence:** HAR 1.2, CSV (Excel), and a compressed `.hspy`
   session file (save/restore full captures including bodies, per-phase timings,
   WebSocket frames and SSE events).
@@ -67,7 +82,10 @@ decrypted response body rendered as a JSON tree.*
   save the response body, bookmark, mark/compare, delete.
 - **Colour-coded grid** — status-class pills (2xx/3xx/4xx/5xx), row tinting from
   highlight rules, bookmark markers, and per-row flags for replayed, truncated
-  and annotated transactions.
+  and annotated transactions. Errors, slow responses and oversized payloads are
+  highlighted out of the box.
+- **Optional columns** — transfer speed, the server IP that actually answered
+  (useful behind a load balancer) and the connection/stream the transaction used.
 - **Auto-scroll** to follow live capture, **dark / light theme toggle** (both
   built from the same design tokens, so neither is an afterthought), and an
   **upstream proxy + TLS-passthrough host** configuration.
@@ -100,12 +118,21 @@ decrypted response body rendered as a JSON tree.*
   (substring or regex); filters persist to `settings.json`.
 - **Summary pane** — consolidated overview per session: sizes, duration,
   transfer speed and compression ratio (decoded vs. on-the-wire bytes).
-- **Charts** — *Top processes* bar chart and a *requests-over-time* histogram
-  (12 buckets) on the Dashboard.
+- **Charts** — status distribution, top hosts/types/methods/processes by count,
+  the same ranked by *total bytes*, the largest and slowest individual responses,
+  and a requests-over-time histogram.
 - **Grouping / tree mode** — group the grid by Host / Process / Method / Status /
   ContentType into collapsible groups.
 - **Converter tool** — URL, Base64, Hex encode/decode and JSON prettify/minify,
   with a one-click "move result to input" for chaining (Tools → Converter).
+- **Regular-expression tester** — a modeless dialog that evaluates a pattern
+  against sample text live, showing every match, its capture groups and the
+  result of a replacement. It uses the same options and the same timeout the
+  rule engine applies, so a pattern that works here works at capture time.
+- **Submitter presets** — ready-made request shapes (JSON API, form post,
+  GraphQL, bearer-authenticated GET, CORS preflight, multipart upload), plus
+  User-Agent and Content-Type quick selectors, a configurable timeout and
+  cancellation of an in-flight request.
 - **Export formats** — HAR 1.2, CSV, **JSON**, **XML**, **TXT**, and
   **save each session to a separate raw file** (File menu).
 
@@ -137,6 +164,25 @@ The result is scored per category and overall, and can be exported as a
 self-contained **HTML** report, plain **text**, or **JSON** for CI pipelines.
 Every check is bounded and defensive — a capture is untrusted input, so no rule
 can throw, hang on a pathological regex, or block the UI thread.
+
+### Structure and connections
+
+The **Structure** tab (Ctrl+2) answers the two questions the chronological grid
+cannot: *what does this application consist of*, and *how was it multiplexed*.
+
+![HttpSpy structure tree](docs/structure.png)
+
+*Site structure* folds every request into a host → path tree where each node
+carries the totals of its whole subtree — requests, bytes, average duration and
+error counts — so the branch responsible for the weight or the failures is
+visible without reading a single row. Numeric, UUID and hash-shaped path
+segments are collapsed by default (`/users/{id}`), which is what keeps a REST
+API legible instead of exploding into one leaf per identifier.
+
+*Connections* groups transactions by the transport connection that carried them
+and reports whether that connection was genuinely multiplexed (streams
+overlapping in time) or merely reused sequentially by keep-alive — a distinction
+that is otherwise a matter of faith.
 
 ### HTTP/2 & gRPC
 
@@ -184,7 +230,8 @@ src/
     Styles/            # design tokens + control styles, dark and light
 tests/
   HttpSpy.Tests/   # xUnit tests (HPACK RFC 7541 vectors, protobuf/gRPC, SNI,
-                   # wire/parsing regressions, traffic analyzer) — 138 tests
+                   # wire/parsing regressions, traffic analyzer, structure and
+                   # connection trees, capture filters) — 184 tests
 ```
 
 `HttpSpy.Core` has no UI dependency and can be referenced from tests or other

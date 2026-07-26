@@ -39,6 +39,15 @@ public sealed class HttpSpySettings
     /// <summary>Persisted visibility of the optional session-grid columns.</summary>
     public List<string> HiddenColumns { get; set; } = new();
 
+    /// <summary>
+    /// Columns explicitly turned on. Needed alongside HiddenColumns because some
+    /// columns default to off — "not hidden" and "shown" are not the same thing.
+    /// </summary>
+    public List<string> ShownColumns { get; set; } = new();
+
+    /// <summary>Capture-level filters that drop traffic before it is recorded.</summary>
+    public List<CaptureFilter> CaptureFilters { get; set; } = new();
+
     /// <summary>Persisted display filters (HTTP Debugger "Set Filters" analog).</summary>
     public List<DisplayFilter> Filters { get; set; } = new();
 
@@ -58,6 +67,7 @@ public sealed class HttpSpySettings
         options.UpstreamProxyHost = string.IsNullOrWhiteSpace(UpstreamProxyHost) ? null : UpstreamProxyHost;
         options.UpstreamProxyPort = UpstreamProxyPort;
         options.TlsPassthroughHosts = new List<string>(TlsPassthroughHosts);
+        options.CaptureFilters = CaptureFilters.Select(f => f.Clone()).ToList();
     }
 
     public static HttpSpySettings FromOptions(ProxyOptions o) => new()
@@ -76,6 +86,7 @@ public sealed class HttpSpySettings
         UpstreamProxyHost = o.UpstreamProxyHost,
         UpstreamProxyPort = o.UpstreamProxyPort,
         TlsPassthroughHosts = new List<string>(o.TlsPassthroughHosts),
+        CaptureFilters = o.CaptureFilters.Select(f => f.Clone()).ToList(),
     };
 }
 
@@ -143,6 +154,42 @@ public static class SettingsStore
 
     public static void SaveRules(IEnumerable<Rule> rules) =>
         WriteAtomic(RulesPath, JsonSerializer.Serialize(rules.ToList(), JsonOptions));
+
+    /// <summary>
+    /// Options, rules and filters bundled into one portable document, so a
+    /// working configuration can be shared with a colleague or committed
+    /// alongside a project rather than re-created by hand on each machine.
+    /// </summary>
+    private sealed class SettingsBundle
+    {
+        public int Version { get; set; } = 1;
+        public string? ExportedAt { get; set; }
+        public HttpSpySettings? Settings { get; set; }
+        public List<Rule>? Rules { get; set; }
+    }
+
+    public static string ExportBundle(HttpSpySettings settings, IEnumerable<Rule> rules) =>
+        JsonSerializer.Serialize(new SettingsBundle
+        {
+            ExportedAt = DateTimeOffset.Now.ToString("O"),
+            Settings = settings,
+            Rules = rules.ToList(),
+        }, JsonOptions);
+
+    /// <summary>
+    /// Parses an exported bundle. Accepts a bare settings object too, so a
+    /// hand-written or older settings.json can be imported directly.
+    /// </summary>
+    public static (HttpSpySettings Settings, List<Rule> Rules) ImportBundle(string json)
+    {
+        var bundle = JsonSerializer.Deserialize<SettingsBundle>(json, JsonOptions);
+        if (bundle?.Settings is not null)
+            return (bundle.Settings, bundle.Rules ?? new List<Rule>());
+
+        var bare = JsonSerializer.Deserialize<HttpSpySettings>(json, JsonOptions)
+                   ?? throw new InvalidDataException("The file does not contain HttpSpy settings.");
+        return (bare, new List<Rule>());
+    }
 
     /// <summary>
     /// Writes via a temporary file and a rename. Settings are saved on every
