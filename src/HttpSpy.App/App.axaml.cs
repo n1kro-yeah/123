@@ -9,6 +9,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using HttpSpy.App.ViewModels;
 using HttpSpy.App.Views;
+using HttpSpy.Core.Models;
 
 namespace HttpSpy.App;
 
@@ -28,6 +29,10 @@ public partial class App : Application
         {
             DisableAvaloniaDataAnnotationValidation();
             InstallCrashHandlers();
+
+            // A crashed run leaves its spilled bodies behind; clear out the ones
+            // whose owning process is gone before adding more.
+            try { BodyStore.CleanOrphans(); } catch { /* best effort */ }
 
             _viewModel = new MainWindowViewModel();
             var window = new MainWindow { DataContext = _viewModel };
@@ -50,6 +55,10 @@ public partial class App : Application
         _shutdownDone = true;
         try { _viewModel?.Shutdown(); }
         catch (Exception ex) { LogFatal("Shutdown", ex); }
+
+        // Drop the temporary files holding spilled bodies.
+        try { BodyStore.Shared.Dispose(); }
+        catch (Exception ex) { LogFatal("BodyStore", ex); }
     }
 
     /// <summary>

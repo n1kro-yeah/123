@@ -61,14 +61,32 @@ public sealed class HttpSession
     public string QueryString { get; set; } = string.Empty;
     public string HttpVersion { get; set; } = "HTTP/1.1";
     public HeaderCollection RequestHeaders { get; set; } = new();
-    public byte[] RequestBody { get; set; } = Array.Empty<byte>();
+    private BodyRef _requestBody;
+
+    /// <summary>
+    /// The captured request body. Backed by <see cref="BodyStore"/>, which keeps
+    /// small bodies on the heap and spills large ones to disk — the property
+    /// still hands back a plain array either way.
+    /// </summary>
+    public byte[] RequestBody
+    {
+        get => _requestBody.Bytes;
+        set => _requestBody = BodyStore.Shared.Store(value);
+    }
 
     // ---- Response ------------------------------------------------------------
     public int StatusCode { get; set; }
     public string StatusText { get; set; } = string.Empty;
     public string ResponseHttpVersion { get; set; } = "HTTP/1.1";
     public HeaderCollection ResponseHeaders { get; set; } = new();
-    public byte[] ResponseBody { get; set; } = Array.Empty<byte>();
+    private BodyRef _responseBody;
+
+    /// <summary>The captured response body. See <see cref="RequestBody"/>.</summary>
+    public byte[] ResponseBody
+    {
+        get => _responseBody.Bytes;
+        set => _responseBody = BodyStore.Shared.Store(value);
+    }
 
     // ---- Streaming -----------------------------------------------------------
     // These are appended to from proxy worker threads while the UI enumerates
@@ -163,8 +181,13 @@ public sealed class HttpSession
     public bool Suppressed { get; set; }
 
     // ---- Derived display helpers --------------------------------------------
-    public long RequestBodySize => RequestBody.LongLength;
-    public long ResponseBodySize => ResponseBody.LongLength;
+    // Sizes come from the reference, so the grid can show them without pulling a
+    // spilled body back off disk on every refresh.
+    public long RequestBodySize => _requestBody.Length;
+    public long ResponseBodySize => _responseBody.Length;
+
+    /// <summary>True when either body was large enough to be written to disk.</summary>
+    public bool BodySpilled => _requestBody.IsSpilled || _responseBody.IsSpilled;
 
     /// <summary>Best-effort total bytes sent on the wire for this transaction.</summary>
     public long BytesSent { get; set; }
@@ -224,13 +247,49 @@ public sealed class HttpSession
         }
     }
 
-    public BodyContentType ResponseBodyKind => BodyClassifier.Classify(ContentType, ResponseBody);
-    public BodyContentType RequestBodyKind =>
-        BodyClassifier.Classify(RequestHeaders["Content-Type"] ?? string.Empty, RequestBody);
+    // Classification sniffs the first bytes, and the grid asks for it on every
+    // refresh; caching it keeps a spilled body from being read back off disk each
+    // time. The identity of the body reference is the cache key.
+    private object? _responseKindSource;
+    private BodyContentType _responseKind;
+    private object? _requestKindSource;
+    private BodyContentType _requestKind;
+
+    public BodyContentType ResponseBodyKind
+    {
+        get
+        {
+            var identity = _responseBody.Identity;
+            if (!ReferenceEquals(_responseKindSource, identity))
+            {
+                _responseKind = BodyClassifier.Classify(ContentType, ResponseBody);
+                _responseKindSource = identity;
+            }
+            return _responseKind;
+        }
+    }
+
+    public BodyContentType RequestBodyKind
+    {
+        get
+        {
+            var identity = _requestBody.Identity;
+            if (!ReferenceEquals(_requestKindSource, identity))
+            {
+                _requestKind = BodyClassifier.Classify(RequestHeaders["Content-Type"] ?? string.Empty, RequestBody);
+                _requestKindSource = identity;
+            }
+            return _requestKind;
+        }
+    }
 
     // Decoding a multi-megabyte body allocates a string just as large, and the UI
     // touches these properties from filters, search and every inspector tab. Cache
     // the result and invalidate it when the underlying bytes change.
+    //
+    // Spilled bodies are deliberately not cached: holding the decoded text would
+    // pin as much memory as keeping the bytes did, which is the whole thing
+    // spilling exists to avoid.
     private byte[]? _requestTextSource;
     private string? _requestText;
     private byte[]? _responseTextSource;
@@ -241,6 +300,8 @@ public sealed class HttpSession
         get
         {
             var body = RequestBody;
+            if (_requestBody.IsSpilled) return SafeDecode(body, RequestHeaders["Content-Type"]);
+
             if (!ReferenceEquals(_requestTextSource, body))
             {
                 _requestText = SafeDecode(body, RequestHeaders["Content-Type"]);
@@ -255,6 +316,8 @@ public sealed class HttpSession
         get
         {
             var body = ResponseBody;
+            if (_responseBody.IsSpilled) return SafeDecode(body, ContentType);
+
             if (!ReferenceEquals(_responseTextSource, body))
             {
                 _responseText = SafeDecode(body, ContentType);
