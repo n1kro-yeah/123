@@ -31,8 +31,26 @@ public partial class MainWindow : Window, IDialogService
     {
         if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.F)
         {
-            var name = e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? "SearchBox" : "FilterBox";
-            var box = this.FindControl<TextBox>(name);
+            // Ctrl+Shift+F is "find across everything" in every editor people
+            // already use; the per-grid boxes stay one keystroke away.
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            {
+                OnSearchRequested();
+                e.Handled = true;
+                return;
+            }
+
+            var box = this.FindControl<TextBox>("FilterBox");
+            if (box is not null)
+            {
+                box.Focus();
+                box.SelectAll();
+                e.Handled = true;
+            }
+        }
+        else if (e.KeyModifiers.HasFlag(KeyModifiers.Control) && e.Key == Key.E)
+        {
+            var box = this.FindControl<TextBox>("SearchBox");
             if (box is not null)
             {
                 box.Focus();
@@ -53,6 +71,7 @@ public partial class MainWindow : Window, IDialogService
             _vm.ConverterRequested -= OnConverterRequested;
             _vm.CaptureFiltersRequested -= OnCaptureFiltersRequested;
             _vm.RegexTesterRequested -= OnRegexTesterRequested;
+            _vm.SearchRequested -= OnSearchRequested;
             _vm.ColumnVisibilityChanged -= ApplyColumnVisibility;
             _vm.LogLines.CollectionChanged -= OnLogLinesChanged;
         }
@@ -67,6 +86,7 @@ public partial class MainWindow : Window, IDialogService
             _vm.ConverterRequested += OnConverterRequested;
             _vm.CaptureFiltersRequested += OnCaptureFiltersRequested;
             _vm.RegexTesterRequested += OnRegexTesterRequested;
+            _vm.SearchRequested += OnSearchRequested;
             _vm.ColumnVisibilityChanged += ApplyColumnVisibility;
             ApplyColumnVisibility();
 
@@ -131,6 +151,43 @@ public partial class MainWindow : Window, IDialogService
     // Modeless: the point of the tester is to keep it open beside the rule editor
     // while iterating on a pattern.
     private void OnRegexTesterRequested() => new RegexTesterWindow().Show(this);
+
+    private SearchWindow? _searchWindow;
+
+    /// <summary>
+    /// Opens the search-everything window, reusing the existing one so repeated
+    /// Ctrl+Shift+F does not stack windows on top of each other.
+    /// </summary>
+    private void OnSearchRequested()
+    {
+        if (_vm is null) return;
+
+        if (_searchWindow is not null)
+        {
+            _searchWindow.Activate();
+            return;
+        }
+
+        _searchWindow = new SearchWindow(
+            () => _vm.AllSessions.Select(v => v.Model).ToList(),
+            SelectSession);
+        _searchWindow.Closed += (_, _) => _searchWindow = null;
+        _searchWindow.Show(this);
+    }
+
+    /// <summary>Brings a transaction into view in the grid and selects it.</summary>
+    private void SelectSession(HttpSession session)
+    {
+        if (_vm is null) return;
+        var vm = _vm.AllSessions.FirstOrDefault(v => v.Model.Id == session.Id);
+        if (vm is null) return;
+
+        _vm.ActiveTabIndex = MainWindowViewModel.TabCapture;
+        _vm.SelectedSession = vm;
+        var grid = this.FindControl<DataGrid>("SessionGrid");
+        try { grid?.ScrollIntoView(vm, null); } catch { /* grid not ready */ }
+        Activate();
+    }
 
     /// <summary>Keeps the diagnostic log pinned to the latest entry as events arrive.</summary>
     private void OnLogLinesChanged(object? sender, NotifyCollectionChangedEventArgs e)

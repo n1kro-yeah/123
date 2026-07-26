@@ -256,6 +256,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// <summary>Raised when the user opens the regular-expression tester.</summary>
     public event Action? RegexTesterRequested;
 
+    /// <summary>Raised when the user opens the search-everything window.</summary>
+    public event Action? SearchRequested;
+
+    /// <summary>Opens full-text search across every captured transaction.</summary>
+    [RelayCommand]
+    private void ShowSearch() => SearchRequested?.Invoke();
+
     /// <summary>Capture-level rules that drop traffic before it is recorded.</summary>
     public ObservableCollection<CaptureFilter> CaptureFilters { get; } = new();
 
@@ -758,7 +765,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             Navigation
               Ctrl+1 … Ctrl+6   Capture, Dashboard, Analysis, Submitter, Rules, Log
               Ctrl+F            Focus the quick filter
-              Ctrl+Shift+F      Focus the header/body search
+              Ctrl+Shift+F      Search every transaction (URLs, headers, bodies, messages)
+              Ctrl+E            Focus the header/body search box
+              Ctrl+Shift+V      Import a cURL command from the clipboard
               F3                Find next match
               Ctrl+Shift+L      Clear every filter
 

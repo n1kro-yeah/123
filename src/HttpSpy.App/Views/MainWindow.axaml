@@ -121,6 +121,9 @@
                 <MenuItem Header="Analyse capture" Command="{Binding Analysis.RunAnalysisCommand}"
                           InputGesture="Ctrl+Shift+A"/>
                 <Separator/>
+                <MenuItem Header="Search all transactions…" Command="{Binding ShowSearchCommand}"
+                          InputGesture="Ctrl+Shift+F"/>
+                <Separator/>
                 <MenuItem Header="Options / Network simulation…" Command="{Binding OpenOptionsCommand}"/>
                 <MenuItem Header="Display filters…" Command="{Binding OpenFiltersCommand}"/>
                 <MenuItem Header="Converter (URL / Base64 / Hex / JSON)…" Command="{Binding OpenConverterCommand}"/>
