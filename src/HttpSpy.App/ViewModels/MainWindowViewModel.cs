@@ -86,6 +86,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         Analysis.SessionSource = () => AllSessions.Select(v => v.Model).ToList();
         Analysis.NavigateToSessionRequested += OnNavigateToSession;
         Analysis.ExportRequested += ExportAnalysisReportAsync;
+        Analysis.SaveBaselineRequested += SaveAnalysisBaselineAsync;
+        Analysis.CompareBaselineRequested += CompareAnalysisBaselineAsync;
 
         Structure.SessionSource = () => AllSessions.Select(v => v.Model).ToList();
         Structure.NavigateToSessionRequested += OnNavigateToSessionModel;
@@ -1171,6 +1173,47 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     }
 
     /// <summary>Writes an analysis report to disk in the requested format.</summary>
+    /// <summary>
+    /// Stores the current report as the state to measure future runs against.
+    /// A single report says what is wrong; only a baseline says what changed.
+    /// </summary>
+    private async Task SaveAnalysisBaselineAsync(AnalysisReport report)
+    {
+        if (Dialogs is null) return;
+        var path = await Dialogs.SaveFileAsync("Save analysis baseline", "httpspy-baseline.json",
+            new[] { ("Analysis baseline", "json") });
+        if (path is null) return;
+
+        try
+        {
+            AnalysisBaseline.From(report, Path.GetFileNameWithoutExtension(path)).Save(path);
+            StatusText = $"Baseline saved: {report.Findings.Count} findings, score {report.OverallScore}";
+        }
+        catch (Exception ex) { await Dialogs.ShowMessageAsync("Save failed", ex.Message); }
+    }
+
+    /// <summary>Diffs the current report against a saved baseline and shows the result.</summary>
+    private async Task CompareAnalysisBaselineAsync(AnalysisReport report)
+    {
+        if (Dialogs is null) return;
+        var path = await Dialogs.OpenFileAsync("Compare against baseline",
+            new[] { ("Analysis baseline", "json") });
+        if (path is null) return;
+
+        try
+        {
+            var comparison = AnalysisBaseline.Load(path).Compare(report);
+            var text = AnalysisBaseline.Render(comparison);
+
+            await Dialogs.SetClipboardAsync(text);
+            StatusText = comparison.Summary();
+            await Dialogs.ShowMessageAsync(
+                comparison.IsClean ? "No regressions against the baseline" : "Regressions found",
+                text + "\n\n(Copied to the clipboard.)");
+        }
+        catch (Exception ex) { await Dialogs.ShowMessageAsync("Comparison failed", ex.Message); }
+    }
+
     private async Task ExportAnalysisReportAsync(AnalysisReport report, string format)
     {
         if (Dialogs is null) return;

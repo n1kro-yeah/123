@@ -94,6 +94,12 @@ public sealed partial class AnalysisViewModel : ViewModelBase
     /// <summary>Raised when the user wants to export the report.</summary>
     public event Func<AnalysisReport, string, Task>? ExportRequested;
 
+    /// <summary>Raised to save the current report as a regression baseline.</summary>
+    public event Func<AnalysisReport, Task>? SaveBaselineRequested;
+
+    /// <summary>Raised to compare the current report against a saved baseline.</summary>
+    public event Func<AnalysisReport, Task>? CompareBaselineRequested;
+
     public ObservableCollection<FindingViewModel> Findings { get; } = new();
     public ObservableCollection<CategoryScoreViewModel> Categories { get; } = new();
 
@@ -271,5 +277,21 @@ public sealed partial class AnalysisViewModel : ViewModelBase
     {
         if (_report is not null && ExportRequested is not null)
             await ExportRequested(_report, "json");
+    }
+
+    /// <summary>Records the current report as the "known good" state to compare against.</summary>
+    [RelayCommand]
+    private async Task SaveBaseline()
+    {
+        if (_report is not null && SaveBaselineRequested is not null)
+            await SaveBaselineRequested(_report);
+    }
+
+    /// <summary>Diffs the current report against a saved baseline.</summary>
+    [RelayCommand]
+    private async Task CompareBaseline()
+    {
+        if (_report is not null && CompareBaselineRequested is not null)
+            await CompareBaselineRequested(_report);
     }
 }

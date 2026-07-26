@@ -49,6 +49,9 @@
                             <MenuItem Header="HTML report…" Command="{Binding ExportHtmlCommand}"/>
                             <MenuItem Header="Plain text…" Command="{Binding ExportTextCommand}"/>
                             <MenuItem Header="JSON (for CI)…" Command="{Binding ExportJsonCommand}"/>
+                            <Separator/>
+                            <MenuItem Header="Save as regression baseline…" Command="{Binding SaveBaselineCommand}"/>
+                            <MenuItem Header="Compare against baseline…" Command="{Binding CompareBaselineCommand}"/>
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
