@@ -63,6 +63,7 @@ public sealed class SessionViewModel : ObservableObject
         {
             var flags = string.Empty;
             if (Model.IsReplay) flags += "↻";
+            if (Model.Imported) flags += "⤓";
             if (IsTruncated) flags += "✂";
             if (!string.IsNullOrEmpty(Model.Comment)) flags += "💬";
             return flags;

@@ -1110,6 +1110,97 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         catch (Exception ex) { await Dialogs.ShowMessageAsync("Open failed", ex.Message); }
     }
 
+    /// <summary>
+    /// Reads traffic captured by something else — a browser's HAR export, a
+    /// request file, our own capture format — and appends it to the grid, so the
+    /// analyzer, the structure tree and the dashboard work on it too.
+    /// </summary>
+    [RelayCommand]
+    private async Task ImportTraffic()
+    {
+        if (Dialogs is null) return;
+        var path = await Dialogs.OpenFileAsync("Import traffic", TrafficImporter.FileFilters);
+        if (path is null) return;
+
+        try
+        {
+            // Our own capture format round-trips through SessionStore, which keeps
+            // WebSocket frames and SSE records the other formats cannot express.
+            if (path.EndsWith(".hsc", StringComparison.OrdinalIgnoreCase) ||
+                path.EndsWith(".hspy", StringComparison.OrdinalIgnoreCase))
+            {
+                AppendSessions(await SessionStore.LoadAsync(path));
+                StatusText = $"Imported {AllSessions.Count} sessions from {Path.GetFileName(path)}";
+                return;
+            }
+
+            var result = await Task.Run(() => TrafficImporter.ImportFile(path));
+            if (result.Sessions.Count == 0)
+            {
+                await Dialogs.ShowMessageAsync("Nothing imported",
+                    result.Warnings.Count > 0
+                        ? string.Join("\n", result.Warnings)
+                        : "The file was not recognised as a HAR, a cURL command or a request file.");
+                return;
+            }
+
+            AppendSessions(result.Sessions);
+            StatusText = $"Imported {result.Sessions.Count} transactions ({result.Format}) from {Path.GetFileName(path)}";
+
+            if (result.Warnings.Count > 0)
+                await Dialogs.ShowMessageAsync($"Imported {result.Sessions.Count} transactions",
+                    "Some details could not be represented exactly:\n\n" + string.Join("\n", result.Warnings.Take(20)));
+        }
+        catch (Exception ex) { await Dialogs.ShowMessageAsync("Import failed", ex.Message); }
+    }
+
+    /// <summary>Imports a cURL command from the clipboard — the "Copy as cURL" round trip.</summary>
+    [RelayCommand]
+    private async Task ImportCurlFromClipboard()
+    {
+        if (Dialogs is null) return;
+        var text = await Dialogs.GetClipboardAsync();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            await Dialogs.ShowMessageAsync("Nothing to import", "The clipboard is empty.");
+            return;
+        }
+
+        var result = TrafficImporter.Import(text);
+        if (result.Sessions.Count == 0)
+        {
+            await Dialogs.ShowMessageAsync("Nothing imported",
+                "The clipboard does not hold a cURL command, a HAR or a request file.\n\n" +
+                string.Join("\n", result.Warnings));
+            return;
+        }
+
+        AppendSessions(result.Sessions);
+        StatusText = $"Imported {result.Sessions.Count} transactions from the clipboard ({result.Format})";
+
+        // A pasted request is nearly always something you want to fire off, so
+        // hand it straight to the Submitter.
+        if (result.Format == ImportFormat.Curl && result.Sessions.Count == 1)
+        {
+            SelectedSession = _index[result.Sessions[0].Id];
+            Submitter.LoadFrom(result.Sessions[0]);
+            ActiveTabIndex = TabSubmitter;
+        }
+    }
+
+    /// <summary>Adds sessions to the grid without clearing what is already there.</summary>
+    private void AppendSessions(IEnumerable<HttpSession> sessions)
+    {
+        foreach (var s in sessions)
+        {
+            var vm = new SessionViewModel(s);
+            _index[s.Id] = vm;
+            AllSessions.Add(vm);
+            TrackQuickFilterValues(vm);
+        }
+        RequestRefresh();
+    }
+
     [RelayCommand]
     private async Task ExportHar()
     {

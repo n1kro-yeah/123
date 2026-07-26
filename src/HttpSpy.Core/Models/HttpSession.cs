@@ -150,6 +150,13 @@ public sealed class HttpSession
     public bool IsReplay { get; set; }
 
     /// <summary>
+    /// True when this transaction was read in from a HAR, a cURL command or a
+    /// request file rather than captured here. Worth distinguishing: an imported
+    /// session may carry only a request, and its timings come from another tool.
+    /// </summary>
+    public bool Imported { get; set; }
+
+    /// <summary>
     /// True when a capture filter excluded this transaction from recording. The
     /// proxy still relays it normally; it just never reaches the session list.
     /// </summary>

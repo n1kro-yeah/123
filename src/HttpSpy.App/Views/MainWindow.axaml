@@ -181,6 +181,10 @@
                             <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}"
                                       InputGesture="Ctrl+S"/>
                             <Separator/>
+                            <MenuItem Header="Import HAR / .http / capture…" Command="{Binding ImportTrafficCommand}"/>
+                            <MenuItem Header="Import cURL from clipboard" Command="{Binding ImportCurlFromClipboardCommand}"
+                                      InputGesture="Ctrl+Shift+V"/>
+                            <Separator/>
                             <MenuItem Header="Export HAR 1.2…" Command="{Binding ExportHarCommand}"/>
                             <MenuItem Header="Export CSV…" Command="{Binding ExportCsvCommand}"/>
                             <MenuItem Header="Export JSON…" Command="{Binding ExportJsonCommand}"/>

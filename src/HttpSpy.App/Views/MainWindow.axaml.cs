@@ -170,6 +170,9 @@ public partial class MainWindow : Window, IDialogService
         if (Clipboard is not null) await Clipboard.SetTextAsync(text);
     }
 
+    public async Task<string?> GetClipboardAsync() =>
+        Clipboard is null ? null : await Clipboard.GetTextAsync();
+
     private static List<FilePickerFileType> ToFileTypes(IReadOnlyList<(string Name, string Ext)> filters) =>
         filters.Select(f => new FilePickerFileType(f.Name) { Patterns = new[] { $"*.{f.Ext}" } }).ToList();
 }

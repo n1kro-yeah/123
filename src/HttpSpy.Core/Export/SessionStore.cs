@@ -145,6 +145,7 @@ public static class SessionStore
         public uint Highlight { get; set; }
         public List<string>? Tags { get; set; }
         public bool IsReplay { get; set; }
+        public bool Imported { get; set; }
 
         // Streaming payloads — v1 dropped these entirely despite claiming to save them.
         public List<WsFrameDto>? WsFrames { get; set; }
@@ -222,6 +223,7 @@ public static class SessionStore
                 Highlight = s.HighlightColor,
                 Tags = s.Tags.Count > 0 ? s.Tags.ToList() : null,
                 IsReplay = s.IsReplay,
+                Imported = s.Imported,
                 WsFrames = s.WebSocketFrameCount == 0 ? null : s.WebSocketFrames.Select(f => new WsFrameDto
                 {
                     Index = f.Index,
@@ -271,6 +273,7 @@ public static class SessionStore
                 Comment = Comment,
                 HighlightColor = Highlight,
                 IsReplay = IsReplay,
+                Imported = Imported,
                 BytesSent = BytesSent,
                 BytesReceived = BytesReceived,
                 EncodedBodySize = EncodedBodySize,
