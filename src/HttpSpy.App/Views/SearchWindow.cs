@@ -9,6 +9,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Layout;
 using Avalonia.Media;
 using HttpSpy.Core.Analysis;
+using HttpSpy.Core.Localization;
 using HttpSpy.Core.Models;
 
 namespace HttpSpy.App.Views;
@@ -58,25 +59,25 @@ public sealed class SearchWindow : Window
         _source = source;
         _navigate = navigate;
 
-        Title = "Search all transactions";
+        Title = Loc.Current["Search.Title"];
         Width = 980;
         Height = 620;
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         WindowIcons.Apply(this);
 
-        _query = new TextBox { Watermark = "text to find in URLs, headers, bodies and messages", MinWidth = 360 };
+        _query = new TextBox { Watermark = Loc.Current["Search.Placeholder"], MinWidth = 360 };
         _query.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) Run(); };
 
-        _regex = new CheckBox { Content = "Regex" };
-        _caseSensitive = new CheckBox { Content = "Match case" };
-        _wholeWord = new CheckBox { Content = "Whole word" };
+        _regex = new CheckBox { Content = Loc.Current["Search.Regex"] };
+        _caseSensitive = new CheckBox { Content = Loc.Current["Search.MatchCase"] };
+        _wholeWord = new CheckBox { Content = Loc.Current["Search.WholeWord"] };
 
-        _urls = new CheckBox { Content = "URLs", IsChecked = true };
-        _headers = new CheckBox { Content = "Headers", IsChecked = true };
-        _bodies = new CheckBox { Content = "Bodies", IsChecked = true };
-        _messages = new CheckBox { Content = "WS / SSE", IsChecked = true };
+        _urls = new CheckBox { Content = Loc.Current["Search.Urls"], IsChecked = true };
+        _headers = new CheckBox { Content = Loc.Current["Search.Headers"], IsChecked = true };
+        _bodies = new CheckBox { Content = Loc.Current["Search.Bodies"], IsChecked = true };
+        _messages = new CheckBox { Content = Loc.Current["Search.Messages"], IsChecked = true };
 
-        var search = new Button { Content = "Search", MinWidth = 96, IsDefault = true };
+        var search = new Button { Content = Loc.Current["Search.Go"], MinWidth = 96, IsDefault = true };
         search.Click += (_, _) => Run();
 
         _status = new TextBlock { Classes = { "muted" }, VerticalAlignment = VerticalAlignment.Center };
@@ -90,7 +91,7 @@ public sealed class SearchWindow : Window
         _results.DoubleTapped += (_, _) => Navigate();
         _results.KeyDown += (_, e) => { if (e.Key == Avalonia.Input.Key.Enter) Navigate(); };
 
-        var go = new Button { Content = "Go to transaction", MinWidth = 150 };
+        var go = new Button { Content = Loc.Current["Search.GoToTransaction"], MinWidth = 170 };
         go.Click += (_, _) => Navigate();
 
         var queryRow = new StackPanel
@@ -110,7 +111,7 @@ public sealed class SearchWindow : Window
         {
             Children =
             {
-                new TextBlock { Text = "Look in:", Classes = { "muted" }, Margin = new Avalonia.Thickness(0, 0, 10, 0),
+                new TextBlock { Text = Loc.Current["Search.LookIn"], Classes = { "muted" }, Margin = new Avalonia.Thickness(0, 0, 10, 0),
                                 VerticalAlignment = VerticalAlignment.Center },
                 _urls, _headers, _bodies, _messages,
             },
@@ -195,7 +196,7 @@ public sealed class SearchWindow : Window
         if (text.Length == 0)
         {
             _rows.Clear();
-            _status.Text = "Type something to search for.";
+            _status.Text = Loc.Current["Search.TypeSomething"];
             return;
         }
 
@@ -203,7 +204,7 @@ public sealed class SearchWindow : Window
         if (scope == SearchScope.None)
         {
             _rows.Clear();
-            _status.Text = "Nothing selected to look in.";
+            _status.Text = Loc.Current["Search.NoScope"];
             return;
         }
 
@@ -217,7 +218,7 @@ public sealed class SearchWindow : Window
         };
 
         var sessions = _source();
-        _status.Text = $"Searching {sessions.Count} transactions…";
+        _status.Text = $"{Loc.Current["Search.Searching"]} ({sessions.Count})";
 
         SearchResults results;
         try

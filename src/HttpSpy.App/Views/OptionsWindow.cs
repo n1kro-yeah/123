@@ -52,6 +52,19 @@ public sealed class OptionsWindow : Window
         throttleEnabled.IsCheckedChanged += (_, _) => SyncThrottleInputs();
         SyncThrottleInputs();
 
+        // The language applies as soon as it is picked rather than on Apply:
+        // seeing the dialog itself change is the clearest confirmation it worked.
+        var language = new ComboBox
+        {
+            ItemsSource = vm.LanguageNames,
+            SelectedIndex = vm.LanguageIndex,
+            MinWidth = 180,
+        };
+        language.SelectionChanged += (_, _) =>
+        {
+            if (language.SelectedIndex >= 0) vm.LanguageIndex = language.SelectedIndex;
+        };
+
         var presets = new ComboBox { ItemsSource = vm.ThrottlePresets, SelectedIndex = 0, MinWidth = 180 };
         presets.SelectionChanged += (_, _) =>
         {
@@ -95,6 +108,9 @@ public sealed class OptionsWindow : Window
             Spacing = 8,
             Children =
             {
+                new TextBlock { Text = "Interface", FontWeight = FontWeight.Bold, FontSize = 15 },
+                Labeled("Language", language),
+                new Separator(),
                 new TextBlock { Text = "Protocols", FontWeight = FontWeight.Bold, FontSize = 15 },
                 enableHttp2,
                 transparent,

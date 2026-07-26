@@ -34,6 +34,9 @@ public sealed class HttpSpySettings
     /// <summary>"Dark" or "Light".</summary>
     public string Theme { get; set; } = "Dark";
 
+    /// <summary>Interface language: "system", "en" or "ru".</summary>
+    public string Language { get; set; } = "system";
+
     public bool AutoScroll { get; set; } = true;
 
     /// <summary>

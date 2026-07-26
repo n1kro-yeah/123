@@ -47,6 +47,14 @@ internal sealed class Http2Connection
         public readonly MemoryStream Body = new();
         public bool HeadersComplete;
         public bool EndStream;
+
+        /// <summary>
+        /// Bytes this stream cost on the wire, frame headers included. Counted
+        /// from the frames themselves rather than from the decoded headers: HPACK
+        /// compresses, so the decoded size is not what was actually sent, and
+        /// without this every h2 transaction reported zero bytes out.
+        /// </summary>
+        public long WireBytes;
     }
 
     public Http2Connection(ProxyEngine engine, Upstream upstream, Stream client,
@@ -147,9 +155,13 @@ internal sealed class Http2Connection
         return true;
     }
 
+    /// <summary>The 9-octet frame header every frame carries (RFC 7540 §4.1).</summary>
+    private const int FrameHeaderSize = 9;
+
     private void HandleHeaders(Http2Frame frame)
     {
         var state = GetOrCreateStream(frame.StreamId);
+        state.WireBytes += FrameHeaderSize + frame.Payload.Length;
         state.EndStream = frame.HasFlag(Http2Flags.EndStream);
         if (frame.HasFlag(Http2Flags.EndHeaders))
         {
@@ -172,6 +184,7 @@ internal sealed class Http2Connection
         if (!frame.HasFlag(Http2Flags.EndHeaders)) return;
 
         var state = GetOrCreateStream(frame.StreamId);
+        state.WireBytes += FrameHeaderSize + frame.Payload.Length;
         state.Headers = _decoder.Decode(_headerBuffer.ToArray()).ToList();
         state.HeadersComplete = true;
         state.EndStream = _headerEndStream;
@@ -183,6 +196,7 @@ internal sealed class Http2Connection
     private async Task HandleDataAsync(Http2Frame frame)
     {
         if (!_streams.TryGetValue(frame.StreamId, out var state)) return;
+        state.WireBytes += FrameHeaderSize + frame.Payload.Length;
         state.Body.Write(frame.DataPayload());
         // Replenish the flow-control window so the client can keep sending.
         if (frame.Payload.Length > 0)
@@ -213,10 +227,11 @@ internal sealed class Http2Connection
         _streams.Remove(streamId);
         byte[] body = state.Body.ToArray();
         var headers = state.Headers;
-        _pending.Add(Task.Run(() => ProcessStreamAsync(streamId, headers, body), _ct));
+        long wireBytes = state.WireBytes;
+        _pending.Add(Task.Run(() => ProcessStreamAsync(streamId, headers, body, wireBytes), _ct));
     }
 
-    private async Task ProcessStreamAsync(int streamId, List<HpackHeader> headers, byte[] body)
+    private async Task ProcessStreamAsync(int streamId, List<HpackHeader> headers, byte[] body, long wireBytes)
     {
         var sw = Stopwatch.StartNew();
         try
@@ -238,7 +253,7 @@ internal sealed class Http2Connection
             }
 
             var (host, port) = SplitHostPort(authority, _port);
-            var session = BuildSession(method, scheme, host, port, path, requestHeaders, body, streamId);
+            var session = BuildSession(method, scheme, host, port, path, requestHeaders, body, streamId, wireBytes);
             _engine.RaiseStarted(session);
 
             var decision = _engine.Rules.EvaluateRequest(session);
@@ -444,7 +459,7 @@ internal sealed class Http2Connection
     }
 
     private HttpSession BuildSession(string method, string scheme, string host, int port, string fullPath,
-        HeaderCollection headers, byte[] body, int streamId)
+        HeaderCollection headers, byte[] body, int streamId, long wireBytes)
     {
         string path = fullPath;
         string query = string.Empty;
@@ -466,6 +481,7 @@ internal sealed class Http2Connection
             RequestBody = body,
             State = SessionState.RequestReceived,
             StartTime = DateTime.Now,
+            BytesSent = wireBytes,
         };
         // Stamping the stream id is what lets the UI show how these requests
         // were multiplexed over the single h2 connection.

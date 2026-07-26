@@ -4,6 +4,7 @@ using System.Globalization;
 using Avalonia.Data.Converters;
 using Avalonia.Media;
 using HttpSpy.Core.Analysis;
+using HttpSpy.Core.Localization;
 using HttpSpy.Core.Models;
 
 namespace HttpSpy.App.Converters;
@@ -339,4 +340,32 @@ public sealed class InvertedBoolIndexConverter : IValueConverter
 
     public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
         value is int i && i == 0;
+}
+
+/// <summary>
+/// Displays the quick-filter sentinel values ("All types", "All hosts", …) in
+/// the interface language while leaving the underlying strings alone.
+///
+/// Those sentinels double as the filter logic's "no filter" markers and are
+/// compared by value throughout the view model, so translating the values
+/// themselves would silently disable the filters. Only the label is localized.
+/// </summary>
+public sealed class QuickFilterLabelConverter : IValueConverter
+{
+    private static readonly Dictionary<string, string> Keys = new(StringComparer.Ordinal)
+    {
+        ["All types"] = "Filter.AllTypes",
+        ["All hosts"] = "Filter.AllHosts",
+        ["All processes"] = "Filter.AllProcesses",
+        ["All"] = "Filter.All",
+    };
+
+    public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+    {
+        if (value is not string text) return value;
+        return Keys.TryGetValue(text, out var key) ? Loc.Current[key] : text;
+    }
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) =>
+        throw new NotSupportedException();
 }

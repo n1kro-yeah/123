@@ -114,10 +114,14 @@ public partial class MainWindow : Window, IDialogService
         if (_vm is null) return;
         var grid = this.FindControl<DataGrid>("SessionGrid");
         if (grid is null) return;
+        // Match on Tag, not Header: headers are localized and would stop
+        // matching the moment the interface language changes.
         var vis = _vm.ColumnVisibility;
         foreach (var column in grid.Columns)
-            if (column.Header is string header && vis.TryGetValue(header, out var v))
-                column.IsVisible = v;
+        {
+            var key = column.Tag as string ?? column.Header as string;
+            if (key is not null && vis.TryGetValue(key, out var v)) column.IsVisible = v;
+        }
     }
 
     private void OnSessionAppended(SessionViewModel vm)

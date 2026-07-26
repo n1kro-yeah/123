@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:HttpSpy.App.ViewModels"
         xmlns:conv="using:HttpSpy.App.Converters"
+        xmlns:l="using:HttpSpy.App.Localization"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="900"
@@ -41,9 +42,9 @@
     <DockPanel>
         <!-- ================= Menu ================= -->
         <Menu DockPanel.Dock="Top">
-            <MenuItem Header="_File">
-                <MenuItem Header="Open session…" Command="{Binding OpenSessionCommand}" InputGesture="Ctrl+O"/>
-                <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}" InputGesture="Ctrl+S"/>
+            <MenuItem Header="{l:T Menu.File}">
+                <MenuItem Header="{l:T Menu.OpenSession}" Command="{Binding OpenSessionCommand}" InputGesture="Ctrl+O"/>
+                <MenuItem Header="{l:T Menu.SaveSession}" Command="{Binding SaveSessionCommand}" InputGesture="Ctrl+S"/>
                 <Separator/>
                 <MenuItem Header="Export">
                     <MenuItem Header="HAR 1.2…" Command="{Binding ExportHarCommand}"/>
@@ -52,11 +53,11 @@
                     <MenuItem Header="XML…" Command="{Binding ExportXmlCommand}"/>
                     <MenuItem Header="Plain text…" Command="{Binding ExportTxtCommand}"/>
                     <Separator/>
-                    <MenuItem Header="One raw file per session…" Command="{Binding ExportSeparateFilesCommand}"/>
+                    <MenuItem Header="{l:T Menu.ExportSeparate}" Command="{Binding ExportSeparateFilesCommand}"/>
                 </MenuItem>
             </MenuItem>
 
-            <MenuItem Header="_Capture">
+            <MenuItem Header="{l:T Menu.CaptureMenu}">
                 <MenuItem Header="Start / Stop" Command="{Binding ToggleCaptureCommand}" InputGesture="F5"/>
                 <Separator/>
                 <MenuItem Header="Start" Command="{Binding StartCaptureCommand}"/>
@@ -67,7 +68,7 @@
                 <MenuItem Header="Keep only bookmarked" Command="{Binding KeepOnlyBookmarkedCommand}"/>
             </MenuItem>
 
-            <MenuItem Header="_Session">
+            <MenuItem Header="{l:T Menu.SessionMenu}">
                 <MenuItem Header="Resend in Submitter" Command="{Binding ResendToSubmitterCommand}" InputGesture="Ctrl+R"/>
                 <Separator/>
                 <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}" InputGesture="Ctrl+U"/>
@@ -81,7 +82,7 @@
                 <MenuItem Header="Delete" Command="{Binding DeleteSelectedCommand}" InputGesture="Delete"/>
             </MenuItem>
 
-            <MenuItem Header="_View">
+            <MenuItem Header="{l:T Menu.View}">
                 <MenuItem Header="Columns">
                     <MenuItem Header="Proto" ToggleType="CheckBox" IsChecked="{Binding ShowProtoColumn, Mode=TwoWay}"/>
                     <MenuItem Header="Method" ToggleType="CheckBox" IsChecked="{Binding ShowMethodColumn, Mode=TwoWay}"/>
@@ -109,19 +110,19 @@
                 <MenuItem Header="Clear all filters" Command="{Binding ClearAllFiltersCommand}" InputGesture="Ctrl+Shift+L"/>
             </MenuItem>
 
-            <MenuItem Header="_HTTPS">
-                <MenuItem Header="Trust root certificate" Command="{Binding InstallCertificateCommand}"/>
+            <MenuItem Header="{l:T Menu.Https}">
+                <MenuItem Header="{l:T Menu.TrustCert}" Command="{Binding InstallCertificateCommand}"/>
                 <MenuItem Header="Export root certificate (.cer)…" Command="{Binding ExportCertificateCommand}"/>
-                <MenuItem Header="Certificate info / copy thumbprint" Command="{Binding ShowCertificateInfoCommand}"/>
+                <MenuItem Header="{l:T Menu.CertInfo}" Command="{Binding ShowCertificateInfoCommand}"/>
                 <Separator/>
-                <MenuItem Header="Remove trust" Command="{Binding UninstallCertificateCommand}"/>
+                <MenuItem Header="{l:T Menu.RemoveTrust}" Command="{Binding UninstallCertificateCommand}"/>
             </MenuItem>
 
-            <MenuItem Header="_Tools">
+            <MenuItem Header="{l:T Menu.Tools}">
                 <MenuItem Header="Analyse capture" Command="{Binding Analysis.RunAnalysisCommand}"
                           InputGesture="Ctrl+Shift+A"/>
                 <Separator/>
-                <MenuItem Header="Search all transactions…" Command="{Binding ShowSearchCommand}"
+                <MenuItem Header="{l:T Menu.SearchAll}" Command="{Binding ShowSearchCommand}"
                           InputGesture="Ctrl+Shift+F"/>
                 <Separator/>
                 <MenuItem Header="Options / Network simulation…" Command="{Binding OpenOptionsCommand}"/>
@@ -139,7 +140,7 @@
                 <MenuItem Header="Toggle dark / light theme" Command="{Binding ToggleThemeCommand}"/>
             </MenuItem>
 
-            <MenuItem Header="_Help">
+            <MenuItem Header="{l:T Menu.Help}">
                 <MenuItem Header="Keyboard shortcuts" Command="{Binding ShowShortcutsCommand}"/>
                 <MenuItem Header="Getting started" Command="{Binding ShowGettingStartedCommand}"/>
             </MenuItem>
@@ -160,49 +161,41 @@
                         Classes.primary="{Binding !IsCapturing}"
                         Classes.recording="{Binding IsCapturing}"
                         ToolTip.Tip="Start or stop capturing traffic  (F5)">
-                    <TextBlock>
-                        <TextBlock.Text>
-                            <Binding Path="IsCapturing">
-                                <Binding.Converter>
-                                    <conv:BoolToTextConverter TrueText="■  Stop capture" FalseText="●  Start capture"/>
-                                </Binding.Converter>
-                            </Binding>
-                        </TextBlock.Text>
-                    </TextBlock>
+                    <TextBlock Text="{Binding CaptureButtonText}"/>
                 </Button>
 
-                <Button Content="Clear" Command="{Binding ClearSessionsCommand}"
+                <Button Content="{l:T Toolbar.Clear}" Command="{Binding ClearSessionsCommand}"
                         ToolTip.Tip="Clear all captured sessions  (Ctrl+L)"/>
 
                 <Border Classes="vsep"/>
 
-                <DropDownButton Content="Session ▾" ToolTip.Tip="Open, save and export the capture">
+                <DropDownButton Content="{l:T Toolbar.Session}" ToolTip.Tip="Open, save and export the capture">
                     <DropDownButton.Flyout>
                         <MenuFlyout>
-                            <MenuItem Header="Open session…" Command="{Binding OpenSessionCommand}"
+                            <MenuItem Header="{l:T Menu.OpenSession}" Command="{Binding OpenSessionCommand}"
                                       InputGesture="Ctrl+O"/>
-                            <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}"
+                            <MenuItem Header="{l:T Menu.SaveSession}" Command="{Binding SaveSessionCommand}"
                                       InputGesture="Ctrl+S"/>
                             <Separator/>
-                            <MenuItem Header="Autosave capture" ToggleType="CheckBox"
+                            <MenuItem Header="{l:T Menu.Autosave}" ToggleType="CheckBox"
                                       IsChecked="{Binding AutosaveEnabled}"/>
                             <Separator/>
-                            <MenuItem Header="Import HAR / .http / capture…" Command="{Binding ImportTrafficCommand}"/>
-                            <MenuItem Header="Import cURL from clipboard" Command="{Binding ImportCurlFromClipboardCommand}"
+                            <MenuItem Header="{l:T Menu.ImportTraffic}" Command="{Binding ImportTrafficCommand}"/>
+                            <MenuItem Header="{l:T Menu.ImportCurl}" Command="{Binding ImportCurlFromClipboardCommand}"
                                       InputGesture="Ctrl+Shift+V"/>
                             <Separator/>
-                            <MenuItem Header="Export HAR 1.2…" Command="{Binding ExportHarCommand}"/>
-                            <MenuItem Header="Export CSV…" Command="{Binding ExportCsvCommand}"/>
-                            <MenuItem Header="Export JSON…" Command="{Binding ExportJsonCommand}"/>
-                            <MenuItem Header="Export XML…" Command="{Binding ExportXmlCommand}"/>
-                            <MenuItem Header="Export plain text…" Command="{Binding ExportTxtCommand}"/>
-                            <MenuItem Header="One raw file per session…"
+                            <MenuItem Header="{l:T Menu.ExportHar}" Command="{Binding ExportHarCommand}"/>
+                            <MenuItem Header="{l:T Menu.ExportCsv}" Command="{Binding ExportCsvCommand}"/>
+                            <MenuItem Header="{l:T Menu.ExportJson}" Command="{Binding ExportJsonCommand}"/>
+                            <MenuItem Header="{l:T Menu.ExportXml}" Command="{Binding ExportXmlCommand}"/>
+                            <MenuItem Header="{l:T Menu.ExportTxt}" Command="{Binding ExportTxtCommand}"/>
+                            <MenuItem Header="{l:T Menu.ExportSeparate}"
                                       Command="{Binding ExportSeparateFilesCommand}"/>
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
 
-                <DropDownButton Content="Capture ▾" ToolTip.Tip="Listener port, decryption and what gets recorded">
+                <DropDownButton Content="{l:T Toolbar.Capture}" ToolTip.Tip="Listener port, decryption and what gets recorded">
                     <DropDownButton.Flyout>
                         <MenuFlyout>
                             <MenuItem Header="Decrypt HTTPS" ToggleType="CheckBox"
@@ -220,22 +213,22 @@
                         ToolTip.Tip="Scan the capture for security, performance and correctness issues  (Ctrl+Shift+A)">
                     <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="⚗"/>
-                        <TextBlock Text="Analyse"/>
+                        <TextBlock Text="{l:T Toolbar.Analyse}"/>
                     </StackPanel>
                 </Button>
 
                 <Border Classes="vsep"/>
 
-                <DropDownButton Content="Certificate ▾"
+                <DropDownButton Content="{l:T Toolbar.Certificate}"
                                 ToolTip.Tip="Trust, export or inspect the HttpSpy root certificate">
                     <DropDownButton.Flyout>
                         <MenuFlyout>
-                            <MenuItem Header="Trust root certificate" Command="{Binding InstallCertificateCommand}"/>
-                            <MenuItem Header="Export root certificate (.pem / .cer)…" Command="{Binding ExportCertificateCommand}"/>
-                            <MenuItem Header="Certificate info / copy thumbprint" Command="{Binding ShowCertificateInfoCommand}"/>
-                            <MenuItem Header="Setup guide for this platform…" Command="{Binding ShowSetupGuideCommand}"/>
+                            <MenuItem Header="{l:T Menu.TrustCert}" Command="{Binding InstallCertificateCommand}"/>
+                            <MenuItem Header="{l:T Menu.ExportCert}" Command="{Binding ExportCertificateCommand}"/>
+                            <MenuItem Header="{l:T Menu.CertInfo}" Command="{Binding ShowCertificateInfoCommand}"/>
+                            <MenuItem Header="{l:T Menu.SetupGuide}" Command="{Binding ShowSetupGuideCommand}"/>
                             <Separator/>
-                            <MenuItem Header="Remove trust" Command="{Binding UninstallCertificateCommand}"/>
+                            <MenuItem Header="{l:T Menu.RemoveTrust}" Command="{Binding UninstallCertificateCommand}"/>
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
@@ -257,7 +250,7 @@
                      new user is most likely to need. -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" Margin="16,0,0,0"
                             VerticalAlignment="Center">
-                    <TextBlock Text="Port" Classes="muted" VerticalAlignment="Center"/>
+                    <TextBlock Text="{l:T Status.Port}" Classes="muted" VerticalAlignment="Center"/>
                     <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"
                                    FormatString="0" Width="96" Increment="1" ShowButtonSpinner="False"
                                    FontSize="12" Padding="6,1"
@@ -285,7 +278,7 @@
         <TabControl SelectedIndex="{Binding ActiveTabIndex}">
 
             <!-- ========== CAPTURE ========== -->
-            <TabItem Header="Capture">
+            <TabItem Header="{l:T Tab.Capture}">
                 <Grid RowDefinitions="Auto,Auto,*">
 
                     <!-- Filter bar: also a WrapPanel. At 1280px the old fixed-width
@@ -297,25 +290,49 @@
                                  the "⋯" menu: they are set once per session, while
                                  these dropdowns are used constantly. -->
                             <TextBox x:Name="FilterBox" Text="{Binding FilterText}"
-                                     Watermark="Filter: url, host, method, status   (Ctrl+F)"
+                                     Watermark="{l:T Filter.Placeholder}"
                                      Width="270"/>
                             <ComboBox ItemsSource="{Binding TypeFilters}" SelectedItem="{Binding TypeFilter}"
-                                      Width="130" ToolTip.Tip="Show only one class of content — data, page assets or streaming"/>
+                                      Width="130" ToolTip.Tip="Show only one class of content — data, page assets or streaming">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Converter={StaticResource QuickFilterLabel}}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                             <ComboBox ItemsSource="{Binding HostFilters}" SelectedItem="{Binding HostFilter}"
-                                      Width="170" ToolTip.Tip="Show only one host (populated from the capture)"/>
+                                      Width="170" ToolTip.Tip="Show only one host (populated from the capture)">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Converter={StaticResource QuickFilterLabel}}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                             <ComboBox ItemsSource="{Binding ProcessFilters}" SelectedItem="{Binding ProcessFilter}"
-                                      Width="140" ToolTip.Tip="Show only one originating process"/>
+                                      Width="158" ToolTip.Tip="Show only one originating process">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Converter={StaticResource QuickFilterLabel}}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
                             <ComboBox ItemsSource="{Binding MethodFilters}" SelectedItem="{Binding MethodFilter}"
-                                      Width="96" ToolTip.Tip="Show only one HTTP method"/>
-                            <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnly}"
+                                      Width="96" ToolTip.Tip="Show only one HTTP method">
+                                <ComboBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding Converter={StaticResource QuickFilterLabel}}"/>
+                                    </DataTemplate>
+                                </ComboBox.ItemTemplate>
+                            </ComboBox>
+                            <CheckBox Content="{l:T Filter.ErrorsOnly}" IsChecked="{Binding ErrorsOnly}"
                                       ToolTip.Tip="Show only 4xx / 5xx responses and failed transactions"/>
 
                             <Border Classes="vsep"/>
 
                             <TextBox x:Name="SearchBox" Text="{Binding AdvancedSearchText}" Width="180"
-                                     Watermark="Search headers + bodies   (Ctrl+Shift+F)"
+                                     Watermark="{l:T Filter.Search}"
                                      ToolTip.Tip="Full-text search across the URL, headers and bodies of every session"/>
-                            <Button Content="Find next" Command="{Binding FindNextCommand}"
+                            <Button Content="{l:T Filter.FindNext}" Command="{Binding FindNextCommand}"
                                     ToolTip.Tip="Jump to the next matching session  (F3)"/>
                             <TextBlock Text="{Binding AdvancedSearchStatus}" VerticalAlignment="Center"
                                        Classes="muted" MinWidth="70"/>
@@ -457,7 +474,7 @@
                                 </DataGrid.ContextMenu>
 
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="56"/>
+                                    <DataGridTextColumn Header="{l:T Column.Index}" Tag="#" Binding="{Binding Index}" Width="56"/>
 
                                     <!-- Bookmark marker: previously the bookmark flag had no
                                          representation in the grid at all. -->
@@ -472,12 +489,12 @@
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
 
-                                    <DataGridTextColumn Header="Proto" Binding="{Binding SchemeGlyph}" Width="80"/>
-                                    <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="98"/>
+                                    <DataGridTextColumn Header="{l:T Column.Protocol}" Tag="Proto" Binding="{Binding SchemeGlyph}" Width="80"/>
+                                    <DataGridTextColumn Header="{l:T Column.Method}" Tag="Method" Binding="{Binding Method}" Width="98"/>
 
                                     <!-- Status as a colour-coded pill so 2xx/4xx/5xx are
                                          distinguishable at a glance while scrolling. -->
-                                    <DataGridTemplateColumn Header="Result" Width="126" SortMemberPath="StatusCode">
+                                    <DataGridTemplateColumn Header="{l:T Column.Result}" Tag="Result" Width="126" SortMemberPath="StatusCode">
                                         <DataGridTemplateColumn.CellTemplate>
                                             <DataTemplate x:DataType="vm:SessionViewModel">
                                                 <StackPanel Orientation="Horizontal" Spacing="6"
@@ -494,20 +511,20 @@
                                         </DataGridTemplateColumn.CellTemplate>
                                     </DataGridTemplateColumn>
 
-                                    <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="200"/>
-                                    <DataGridTextColumn Header="URL" Binding="{Binding PathAndQuery}" Width="*"/>
-                                    <DataGridTextColumn Header="Type" Binding="{Binding ContentType}" Width="146"/>
-                                    <DataGridTextColumn Header="Size"
+                                    <DataGridTextColumn Header="{l:T Column.Host}" Tag="Host" Binding="{Binding Host}" Width="200"/>
+                                    <DataGridTextColumn Header="{l:T Column.Url}" Tag="URL" Binding="{Binding PathAndQuery}" Width="*"/>
+                                    <DataGridTextColumn Header="{l:T Column.Type}" Tag="Type" Binding="{Binding ContentType}" Width="146"/>
+                                    <DataGridTextColumn Header="{l:T Column.Size}" Tag="Size"
                                                         Binding="{Binding Size, Converter={StaticResource ByteSize}}"
-                                                        Width="82"/>
-                                    <DataGridTextColumn Header="Time"
+                                                        Width="96"/>
+                                    <DataGridTextColumn Header="{l:T Column.Time}" Tag="Time"
                                                         Binding="{Binding DurationMs, Converter={StaticResource Duration}}"
-                                                        Width="82"/>
-                                    <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="122"/>
-                                    <DataGridTextColumn Header="Speed" Width="92"
+                                                        Width="96"/>
+                                    <DataGridTextColumn Header="{l:T Column.Process}" Tag="Process" Binding="{Binding ProcessName}" Width="122"/>
+                                    <DataGridTextColumn Header="{l:T Column.Speed}" Tag="Speed" Width="92"
                                                         Binding="{Binding SpeedBytesPerSecond, Converter={StaticResource ByteSize}, StringFormat='{}{0}/s'}"/>
-                                    <DataGridTextColumn Header="Server" Binding="{Binding RemoteAddress}" Width="126"/>
-                                    <DataGridTextColumn Header="Conn" Binding="{Binding ConnectionLabel}" Width="76"/>
+                                    <DataGridTextColumn Header="{l:T Column.Server}" Tag="Server" Binding="{Binding RemoteAddress}" Width="126"/>
+                                    <DataGridTextColumn Header="{l:T Column.Connection}" Tag="Conn" Binding="{Binding ConnectionLabel}" Width="76"/>
                                 </DataGrid.Columns>
                             </DataGrid>
 
@@ -515,8 +532,8 @@
                             <StackPanel Classes="empty-state" IsHitTestVisible="False"
                                         IsVisible="{Binding !HasSessions}">
                                 <TextBlock Text="◎" Classes="glyph"/>
-                                <TextBlock Text="No traffic captured yet" Classes="title"/>
-                                <TextBlock Text="Press F5 (or “Start capture”), then send traffic through 127.0.0.1 on the port shown in the toolbar. To decrypt HTTPS, first use Certificate ▸ Trust root certificate."/>
+                                <TextBlock Text="{l:T Empty.NoTraffic}" Classes="title"/>
+                                <TextBlock Text="{l:T Empty.NoTrafficHint}"/>
                             </StackPanel>
                         </Panel>
 
@@ -532,8 +549,8 @@
                                 <StackPanel Classes="empty-state"
                                             IsVisible="{Binding SelectedSession, Converter={x:Static ObjectConverters.IsNull}}">
                                     <TextBlock Text="◱" Classes="glyph"/>
-                                    <TextBlock Text="Select a session to inspect it"/>
-                                    <TextBlock Text="Headers, cookies, query and form fields, the decoded body, a JSON tree, the timing waterfall and generated client code all appear here."/>
+                                    <TextBlock Text="{l:T Empty.NoSelection}" Classes="title"/>
+                                    <TextBlock Text="{l:T Empty.NoSelectionHint}"/>
                                 </StackPanel>
                             </Panel>
                         </Border>
@@ -542,12 +559,12 @@
             </TabItem>
 
             <!-- ========== STRUCTURE ========== -->
-            <TabItem Header="Structure">
+            <TabItem Header="{l:T Tab.Structure}">
                 <ContentControl Content="{Binding Structure}"/>
             </TabItem>
 
             <!-- ========== DASHBOARD ========== -->
-            <TabItem Header="Dashboard">
+            <TabItem Header="{l:T Tab.Dashboard}">
                 <DockPanel>
                     <Border DockPanel.Dock="Top" Classes="toolbar">
                         <StackPanel Orientation="Horizontal" Spacing="8">
@@ -562,17 +579,17 @@
             </TabItem>
 
             <!-- ========== ANALYSIS ========== -->
-            <TabItem Header="Analysis">
+            <TabItem Header="{l:T Tab.Analysis}">
                 <ContentControl Content="{Binding Analysis}"/>
             </TabItem>
 
             <!-- ========== SUBMITTER ========== -->
-            <TabItem Header="Submitter">
+            <TabItem Header="{l:T Tab.Submitter}">
                 <ContentControl Content="{Binding Submitter}"/>
             </TabItem>
 
             <!-- ========== RULES ========== -->
-            <TabItem Header="Rules">
+            <TabItem Header="{l:T Tab.Rules}">
                 <Grid ColumnDefinitions="340,5,*" Margin="10">
                     <DockPanel Grid.Column="0">
                         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
@@ -733,7 +750,7 @@
             </TabItem>
 
             <!-- ========== LOG ========== -->
-            <TabItem Header="Log">
+            <TabItem Header="{l:T Tab.Log}">
                 <DockPanel Margin="10">
                     <Border DockPanel.Dock="Top" Classes="chrome" BorderThickness="0,0,0,1" Padding="0,0,0,8">
                         <StackPanel Orientation="Horizontal" Spacing="7">

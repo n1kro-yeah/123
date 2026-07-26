@@ -14,6 +14,7 @@ using HttpSpy.App.Services;
 using HttpSpy.Core;
 using HttpSpy.Core.Analysis;
 using HttpSpy.Core.Export;
+using HttpSpy.Core.Localization;
 using HttpSpy.Core.Models;
 using HttpSpy.Core.Proxy;
 using HttpSpy.Core.Rules;
@@ -77,6 +78,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         AutoScroll = _settings.AutoScroll;
         IsDarkTheme = !string.Equals(_settings.Theme, "Light", StringComparison.OrdinalIgnoreCase);
         ApplyTheme();
+
+        // Restore the interface language before anything reads a localized string.
+        Loc.Current.Language = Loc.Parse(_settings.Language);
+        _languageIndex = Loc.Current.Language switch
+        {
+            AppLanguage.English => 1,
+            AppLanguage.Russian => 2,
+            _ => 0,
+        };
+        Loc.Current.LanguageChanged += () => OnPropertyChanged(nameof(CaptureButtonText));
+
+        // Field initializers run before the language is restored, so the idle
+        // status would otherwise be stuck in English until something replaced it.
+        StatusText = Loc.Current["Status.Ready"];
 
         SessionsView = new DataGridCollectionView(AllSessions) { Filter = o => PassesFilter((SessionViewModel)o) };
         AllSessions.CollectionChanged += (_, _) => HasSessions = AllSessions.Count > 0;
@@ -279,6 +294,35 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     // ---- Capture state -------------------------------------------------------
     [ObservableProperty] private bool _isCapturing;
+
+    /// <summary>
+    /// The primary button's caption. It lives here rather than in the view so it
+    /// can follow both the capture state and the interface language.
+    /// </summary>
+    public string CaptureButtonText =>
+        IsCapturing ? "■  " + Loc.Current["Toolbar.Stop"] : "●  " + Loc.Current["Toolbar.Start"];
+
+    partial void OnIsCapturingChanged(bool value) => OnPropertyChanged(nameof(CaptureButtonText));
+
+    // ---- Interface language --------------------------------------------------
+
+    /// <summary>Choices for the language picker: system default, English, Russian.</summary>
+    public IReadOnlyList<string> LanguageNames => Loc.LanguageNames;
+
+    [ObservableProperty] private int _languageIndex;
+
+    partial void OnLanguageIndexChanged(int value)
+    {
+        Loc.Current.Language = value switch
+        {
+            1 => AppLanguage.English,
+            2 => AppLanguage.Russian,
+            _ => AppLanguage.System,
+        };
+        _settings.Language = Loc.ToCode(Loc.Current.Language);
+        OnPropertyChanged(nameof(CaptureButtonText));
+        PersistSettings();
+    }
     [ObservableProperty] private int _listenPort;
     [ObservableProperty] private bool _decryptHttps;
     [ObservableProperty] private bool _setSystemProxy;
@@ -288,7 +332,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// Kept separate from <see cref="StatsText"/>: both used to share one property,
     /// so the 750 ms stats tick wiped every message before it could be read.
     /// </summary>
-    [ObservableProperty] private string _statusText = "Ready";
+    [ObservableProperty] private string _statusText = Loc.Current["Status.Ready"];
 
     /// <summary>Live capture counters, refreshed on a timer.</summary>
     [ObservableProperty] private string _statsText = "■ Stopped";
@@ -613,7 +657,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             _engine.Start();
             IsCapturing = true;
-            StatusText = $"Capturing on {_engine.Options.ListenAddress}:{_engine.Options.ListenPort}";
+            StatusText = $"{Loc.Current["Status.Capturing"]} {_engine.Options.ListenAddress}:{_engine.Options.ListenPort}";
         }
         catch (Exception ex)
         {
@@ -1629,15 +1673,15 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             case TrustState.Trusted:
                 IsCertTrusted = true;
-                CertStatus = "🔒 Root CA trusted";
+                CertStatus = "🔒 " + Loc.Current["Cert.Trusted"];
                 break;
             case TrustState.NotTrusted:
                 IsCertTrusted = false;
-                CertStatus = "⚠ Root CA not trusted";
+                CertStatus = "⚠ " + Loc.Current["Cert.NotTrusted"];
                 break;
             default:
                 IsCertTrusted = false;
-                CertStatus = "🔒 Root CA — trust unverified";
+                CertStatus = "🔒 " + Loc.Current["Cert.Unknown"];
                 break;
         }
     }
@@ -1821,6 +1865,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             s.Theme = IsDarkTheme ? "Dark" : "Light";
             s.AutoScroll = AutoScroll;
             s.AutosaveEnabled = AutosaveEnabled;
+            s.Language = Loc.ToCode(Loc.Current.Language);
             s.AutosaveIntervalSeconds = _settings.AutosaveIntervalSeconds;
             s.Filters = Filters.Select(f => f.Clone()).ToList();
             s.HiddenColumns = ColumnVisibility.Where(kv => !kv.Value).Select(kv => kv.Key).ToList();
@@ -1912,15 +1957,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private void UpdateStats()
     {
         var st = _engine.Statistics;
-        string capturing = IsCapturing ? "● REC" : "■ Stopped";
+        string capturing = IsCapturing ? "● " + Loc.Current["Stats.Recording"] : "■ " + Loc.Current["Stats.Stopped"];
         string sim = _engine.Options.ThrottleEnabled ? $"   ⚡ {_engine.Options.ThrottleKbps} kbps" : "";
         int shown = SessionsView.Count;
-        string filtered = shown != AllSessions.Count ? $" ({shown} shown)" : "";
+        string filtered = shown != AllSessions.Count ? $" ({shown} {Loc.Current["Stats.Shown"]})" : "";
 
-        StatsText = $"{capturing}   Sessions: {AllSessions.Count}{filtered}   " +
-                    $"Active conns: {st.ActiveConnections}   " +
-                    $"In: {Converters.ByteSizeConverter.Format(st.BytesReceived)}   " +
-                    $"Out: {Converters.ByteSizeConverter.Format(st.BytesSent)}   Errors: {st.Errors}{sim}";
+        StatsText = $"{capturing}   {Loc.Current["Stats.Sessions"]}: {AllSessions.Count}{filtered}   " +
+                    $"{Loc.Current["Stats.Connections"]}: {st.ActiveConnections}   " +
+                    $"{Loc.Current["Stats.In"]}: {Converters.ByteSizeConverter.Format(st.BytesReceived)}   " +
+                    $"{Loc.Current["Stats.Out"]}: {Converters.ByteSizeConverter.Format(st.BytesSent)}   " +
+                    $"{Loc.Current["Stats.Errors"]}: {st.Errors}{sim}";
 
         if (string.IsNullOrEmpty(CertStatus))
             RefreshCertStatus();

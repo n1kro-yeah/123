@@ -16,6 +16,7 @@
         <conv:ScoreToBrushConverter x:Key="ScoreToBrush"/>
         <conv:KindToGlyphConverter x:Key="KindToGlyph"/>
         <conv:ByteSizeConverter x:Key="ByteSize"/>
+        <conv:QuickFilterLabelConverter x:Key="QuickFilterLabel"/>
         <conv:DurationConverter x:Key="Duration"/>
         <conv:StringNotEmptyConverter x:Key="StringNotEmpty"/>
         <conv:CountToBoolConverter x:Key="CountToBool"/>

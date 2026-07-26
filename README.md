@@ -64,6 +64,10 @@ response inspected below.*
 - **Export / persistence:** HAR 1.2, CSV (Excel), and a compressed `.hspy`
   session file (save/restore full captures including bodies, per-phase timings,
   WebSocket frames and SSE events).
+- **Import**: a HAR 1.2 log from browser devtools, a cURL command from the
+  clipboard (all four quoting styles browsers emit), or a `.http` request file.
+  Imported traffic feeds the analyzer, the structure tree and the dashboard just
+  like a live capture, so a trace captured elsewhere can be inspected here.
 
 ### Pro-level workflow features
 
@@ -92,9 +96,25 @@ response inspected below.*
 - **Bounded by design** — capped buffered bodies, a session retention limit that
   never evicts bookmarked or selected rows, capped WebSocket/SSE retention, and
   a coalesced grid refresh, so a long unattended capture stays responsive.
-- **Persistent settings & rules** — all options, the theme and the rule list are
-  saved to `%APPDATA%\HttpSpy\` (`settings.json` + `rules.json`) and restored on
-  the next launch.
+- **Search everything** (Ctrl+Shift+F) — full-text search across every captured
+  transaction's URLs, headers, bodies and WebSocket/SSE messages, with regex,
+  match-case and whole-word; results list the matching line and jump to the
+  transaction. Long lines are trimmed around the match, so a minified bundle on
+  one 400 KB line stays readable.
+- **Autosave and crash recovery** — the live capture is snapshotted periodically
+  and offered back on the next start after an unclean exit. A marker file tells a
+  crash from a deliberate close, so a normal shutdown never nags.
+- **Network simulation that actually applies** — one shared bandwidth budget
+  paces HTTP/1.1, HTTP/2, WebSocket, SSE and opaque CONNECT tunnels alike, with
+  latency injected once per response.
+- **Bounded memory for large bodies** — bodies above a threshold are spilled to
+  a temporary file and read back on demand, so an overnight capture of large
+  responses cannot exhaust the heap. Spill files are released with the session.
+- **English and Russian interface** — switchable at runtime from
+  *Tools ▸ Options ▸ Language*, defaulting to the system language.
+- **Persistent settings & rules** — all options, the theme, the language and the
+  rule list are saved to `%APPDATA%\HttpSpy\` (`settings.json` + `rules.json`)
+  and restored on the next launch.
 
 ### HTTP Debugger-parity features
 
@@ -228,10 +248,13 @@ src/
     Proxy/Transparent/ # WinDivert interop + redirector, TLS SNI parser (transparent capture)
   HttpSpy.App/     # Avalonia desktop UI (WinExe, net8.0)
     Styles/            # design tokens + control styles, dark and light
+    Localization/      # XAML markup extension for the string catalogue
 tests/
   HttpSpy.Tests/   # xUnit tests (HPACK RFC 7541 vectors, protobuf/gRPC, SNI,
                    # wire/parsing regressions, traffic analyzer, structure and
-                   # connection trees, capture filters) — 184 tests
+                   # connection trees, capture filters, throttling, HAR/cURL
+                   # import, autosave, search, baselines, body spilling,
+                   # localization) — 330 tests
 ```
 
 `HttpSpy.Core` has no UI dependency and can be referenced from tests or other
@@ -274,9 +297,19 @@ dotnet build -c Release
 dotnet run -c Release --project src/HttpSpy.App
 ```
 
-The system-proxy and trust-store automation are Windows-only; on Linux/macOS
-configure your client to use `http://127.0.0.1:8888` and import the exported
-root certificate (`~/.config/HttpSpy/Certificates/HttpSpyRootCA.cer`) manually.
+Automatic trust-store installation is Windows-only, but the other platforms are
+not left to guess: **Certificate ▸ Setup guide for this platform** exports the
+root CA as PEM and prints the exact commands for the machine it is running on —
+`update-ca-certificates`, `security add-trusted-cert`, `SSL_CERT_FILE`,
+`NODE_EXTRA_CA_CERTS`, `curl --cacert`, the Chromium NSS database and the
+Firefox importer — with the real paths and port filled in, copied to the
+clipboard.
+
+The system proxy is set automatically on Windows (WinINET) and on GNOME desktops
+(`gsettings`, per-user and reversible); elsewhere the same guide gives the
+`HTTPS_PROXY` lines to export. The trust indicator in the status bar reports
+"unverified" rather than "not trusted" when no readable trust store exists, so it
+never sends you chasing a problem you do not have.
 
 ## How HTTPS decryption works
 
