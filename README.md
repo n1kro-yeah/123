@@ -9,6 +9,9 @@ and can be developed and demoed on Linux/macOS.
 
 ![HttpSpy capture grid](docs/capture.png)
 
+*Live capture: HTTP/1.1 and HTTP/2 side by side, status-coded rows, and the
+decrypted response body rendered as a JSON tree.*
+
 ## Features
 
 - **Live capture** of HTTP and HTTPS traffic with a real-time session grid
@@ -111,6 +114,8 @@ and can be developed and demoed on Linux/macOS.
 Press **Ctrl+Shift+A** (or open the **Analysis** tab and click *Analyse capture*)
 to run every captured transaction through a rule engine that reports what is
 actually wrong with the traffic, not just what it contained.
+
+![HttpSpy traffic analysis](docs/analysis.png)
 
 Each finding carries a severity, the subject it applies to, what was observed,
 the literal header/body excerpt that triggered it (with credentials redacted),

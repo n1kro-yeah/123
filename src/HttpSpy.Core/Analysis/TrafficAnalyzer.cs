@@ -898,16 +898,23 @@ public sealed class WeakContentSecurityPolicyRule : IAnalysisRule
         var csp = ctx.ResponseHeader("Content-Security-Policy")!;
         var problems = new List<string>();
 
-        if (csp.Contains("'unsafe-inline'", StringComparison.OrdinalIgnoreCase))
-            problems.Add("'unsafe-inline' permits injected inline scripts");
-        if (csp.Contains("'unsafe-eval'", StringComparison.OrdinalIgnoreCase))
-            problems.Add("'unsafe-eval' permits eval() and string-to-code conversion");
-        if (Regex.IsMatch(csp, @"(script-src|default-src)[^;]*\*(\s|;|$)",
-                RegexOptions.IgnoreCase, RuleHelpers.RegexTimeout))
-            problems.Add("a wildcard source allows script from any origin");
-        if (csp.Contains("data:", StringComparison.OrdinalIgnoreCase) &&
-            csp.Contains("script-src", StringComparison.OrdinalIgnoreCase))
-            problems.Add("data: URIs are allowed as a script source");
+        // Only the directives that govern *script execution* matter here.
+        // "style-src 'unsafe-inline'" is routine and not a script-injection risk,
+        // so matching 'unsafe-inline' anywhere in the policy misreported strong
+        // policies like "default-src 'none'; style-src 'unsafe-inline'".
+        var scriptDirective = ScriptDirective(csp);
+
+        if (scriptDirective is not null)
+        {
+            if (scriptDirective.Contains("'unsafe-inline'", StringComparison.OrdinalIgnoreCase))
+                problems.Add("'unsafe-inline' in the script directive permits injected inline scripts");
+            if (scriptDirective.Contains("'unsafe-eval'", StringComparison.OrdinalIgnoreCase))
+                problems.Add("'unsafe-eval' permits eval() and string-to-code conversion");
+            if (RuleHelpers.Matches(WildcardSource, scriptDirective))
+                problems.Add("a wildcard source allows script from any origin");
+            if (scriptDirective.Contains("data:", StringComparison.OrdinalIgnoreCase))
+                problems.Add("data: URIs are allowed as a script source");
+        }
 
         if (problems.Count == 0) yield break;
 
@@ -923,6 +930,33 @@ public sealed class WeakContentSecurityPolicyRule : IAnalysisRule
                           "or per-request nonces.",
             Evidence = RuleHelpers.Excerpt(csp, 220),
         };
+    }
+
+    private static readonly Regex WildcardSource = RuleHelpers.Compile(@"(^|\s)\*(\s|$)");
+
+    /// <summary>
+    /// Returns the directive that actually controls script loading: <c>script-src</c>
+    /// when present, otherwise the <c>default-src</c> it falls back to. Null when
+    /// the policy constrains neither.
+    /// </summary>
+    private static string? ScriptDirective(string csp)
+    {
+        string? defaultSrc = null;
+        foreach (var raw in csp.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int space = raw.IndexOf(' ');
+            if (space <= 0) continue;
+            var name = raw[..space].Trim();
+
+            // script-src-elem/-attr are more specific and win when present.
+            if (name.Equals("script-src", StringComparison.OrdinalIgnoreCase) ||
+                name.Equals("script-src-elem", StringComparison.OrdinalIgnoreCase))
+                return raw[(space + 1)..];
+
+            if (name.Equals("default-src", StringComparison.OrdinalIgnoreCase))
+                defaultSrc = raw[(space + 1)..];
+        }
+        return defaultSrc;
     }
 }
 

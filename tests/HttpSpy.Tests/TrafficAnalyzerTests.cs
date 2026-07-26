@@ -109,7 +109,7 @@ public class TrafficAnalyzerTests
     }
 
     [Fact]
-    public void Unsafe_inline_csp_is_reported_as_weak()
+    public void Unsafe_inline_in_the_script_directive_is_reported_as_weak()
     {
         var report = Analyze(Session(responseHeaders: new[]
         {
@@ -118,6 +118,53 @@ public class TrafficAnalyzerTests
 
         var finding = Assert.Single(report.Findings.Where(f => f.RuleId == "SEC007"));
         Assert.Equal(FindingSeverity.High, finding.Severity); // two problems present
+    }
+
+    [Fact]
+    public void Unsafe_inline_confined_to_style_src_is_not_a_script_risk()
+    {
+        // GitHub's real policy. Matching 'unsafe-inline' anywhere in the header
+        // misreported this genuinely strong CSP as script-injectable.
+        var report = Analyze(Session(responseHeaders: new[]
+        {
+            ("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'"),
+        }));
+
+        Assert.False(Has(report, "SEC007"));
+    }
+
+    [Fact]
+    public void Script_src_falls_back_to_default_src_when_absent()
+    {
+        var report = Analyze(Session(responseHeaders: new[]
+        {
+            ("Content-Security-Policy", "default-src 'self' 'unsafe-eval'"),
+        }));
+
+        Assert.True(Has(report, "SEC007"));
+    }
+
+    [Fact]
+    public void A_wildcard_inside_a_hostname_is_not_a_wildcard_source()
+    {
+        // "*.cdn.example.com" is an explicit origin pattern, not "allow anything".
+        var report = Analyze(Session(responseHeaders: new[]
+        {
+            ("Content-Security-Policy", "default-src 'none'; script-src 'self' *.cdn.example.com"),
+        }));
+
+        Assert.False(Has(report, "SEC007"));
+    }
+
+    [Fact]
+    public void A_bare_wildcard_script_source_is_reported()
+    {
+        var report = Analyze(Session(responseHeaders: new[]
+        {
+            ("Content-Security-Policy", "script-src 'self' *"),
+        }));
+
+        Assert.True(Has(report, "SEC007"));
     }
 
     [Fact]
