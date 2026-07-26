@@ -69,7 +69,23 @@ public partial class MainWindow : Window, IDialogService
             _vm.RegexTesterRequested += OnRegexTesterRequested;
             _vm.ColumnVisibilityChanged += ApplyColumnVisibility;
             ApplyColumnVisibility();
+
+            // Ask about a crashed session once the window can actually show a
+            // dialog — the view model is constructed long before that.
+            Avalonia.Threading.Dispatcher.UIThread.Post(
+                () => _ = _vm.CheckForRecoveryAsync(),
+                Avalonia.Threading.DispatcherPriority.Background);
         }
+    }
+
+    /// <summary>
+    /// Records the shutdown as clean, so the next launch does not offer to
+    /// recover a capture the user deliberately closed.
+    /// </summary>
+    protected override void OnClosed(EventArgs e)
+    {
+        _vm?.ShutdownCleanly();
+        base.OnClosed(e);
     }
 
     /// <summary>Shows/hides the optional grid columns per the view model flags.</summary>

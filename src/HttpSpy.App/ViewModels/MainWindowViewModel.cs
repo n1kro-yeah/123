@@ -116,6 +116,125 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         ShowServerColumn = _settings.ShownColumns.Contains("Server");
         ShowConnectionColumn = _settings.ShownColumns.Contains("Conn");
         _columnsLoaded = true;
+
+        // A long capture that dies with the process takes the whole afternoon
+        // with it; snapshot it periodically instead. The backing field is set
+        // directly because the change handler needs the timer to exist.
+        _autosaveEnabled = _settings.AutosaveEnabled;
+        // Clamped: a settings file carrying 0 would give the timer a zero interval
+        // and spin a core writing snapshots.
+        _autosaveTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(Math.Clamp(_settings.AutosaveIntervalSeconds, 10, 3600)),
+        };
+        _autosaveTimer.Tick += (_, _) => _ = RunAutosaveAsync();
+        if (_settings.AutosaveEnabled) _autosaveTimer.Start();
+    }
+
+    // ---- Autosave / crash recovery -------------------------------------------
+
+    private readonly AutosaveStore _autosave = new();
+    private readonly DispatcherTimer _autosaveTimer;
+    private int _autosavedCount = -1;
+    private bool _autosaveRunning;
+
+    /// <summary>Set once a snapshot has been written, so the status bar can say so.</summary>
+    [ObservableProperty] private string _autosaveStatus = "";
+
+    /// <summary>Whether periodic snapshots are taken at all.</summary>
+    [ObservableProperty] private bool _autosaveEnabled = true;
+
+    partial void OnAutosaveEnabledChanged(bool value)
+    {
+        _settings.AutosaveEnabled = value;
+        if (value) _autosaveTimer.Start();
+        else
+        {
+            _autosaveTimer.Stop();
+            // Leaving a marker behind after the user turned autosave off would
+            // produce a recovery prompt with nothing to recover.
+            try { _autosave.EndSession(); } catch { /* best effort */ }
+        }
+        PersistSettings();
+    }
+
+    /// <summary>
+    /// Writes a snapshot when something has actually changed. Skipping unchanged
+    /// captures keeps an idle app from rewriting megabytes every interval.
+    /// </summary>
+    private async Task RunAutosaveAsync()
+    {
+        if (_autosaveRunning || !_settings.AutosaveEnabled) return;
+        if (AllSessions.Count == 0 || AllSessions.Count == _autosavedCount) return;
+
+        _autosaveRunning = true;
+        try
+        {
+            var snapshot = AllSessions.Select(v => v.Model).ToList();
+            if (await _autosave.SaveAsync(snapshot))
+            {
+                _autosavedCount = snapshot.Count;
+                AutosaveStatus = $"Autosaved {snapshot.Count} at {DateTime.Now:HH:mm:ss}";
+            }
+        }
+        catch (Exception ex)
+        {
+            // Autosave failing is worth a log line, never a crash.
+            OnLog($"Autosave failed: {ex.Message}");
+        }
+        finally { _autosaveRunning = false; }
+    }
+
+    /// <summary>
+    /// Offers to restore a snapshot left behind by an unclean exit. Called once
+    /// the window is up, since it needs to be able to ask.
+    /// </summary>
+    public async Task CheckForRecoveryAsync()
+    {
+        if (Dialogs is null || !_settings.AutosaveEnabled) return;
+
+        AutosaveInfo? info;
+        try { info = _autosave.FindRecoverable(); }
+        catch { return; }
+        if (info is null) return;
+
+        string age = info.Age.TotalMinutes < 90
+            ? $"{Math.Max(1, (int)info.Age.TotalMinutes)} minutes ago"
+            : $"{info.Age.TotalHours:F1} hours ago";
+
+        if (await Dialogs.ConfirmAsync("Recover the previous capture?",
+                $"HttpSpy did not shut down cleanly. A snapshot of {info.SessionCount} transactions " +
+                $"was saved {age}.\n\nRestore it?"))
+        {
+            try
+            {
+                var restored = await _autosave.RestoreAsync();
+                AppendSessions(restored);
+                _autosavedCount = AllSessions.Count;
+                StatusText = $"Recovered {restored.Count} transactions from the last session";
+            }
+            catch (Exception ex)
+            {
+                await Dialogs.ShowMessageAsync("Recovery failed", ex.Message);
+            }
+        }
+        else
+        {
+            _autosave.Discard();
+        }
+
+        // Either way this is now a fresh session; take ownership of the marker.
+        _autosave.BeginSession();
+    }
+
+    /// <summary>
+    /// Records a clean shutdown so the next start does not offer a recovery the
+    /// user does not need.
+    /// </summary>
+    public void ShutdownCleanly()
+    {
+        _autosaveTimer.Stop();
+        try { _autosave.EndSession(); } catch { /* best effort */ }
     }
 
     // ---- Collections ---------------------------------------------------------
@@ -1649,6 +1768,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             s.SetSystemProxy = SetSystemProxy;
             s.Theme = IsDarkTheme ? "Dark" : "Light";
             s.AutoScroll = AutoScroll;
+            s.AutosaveEnabled = AutosaveEnabled;
+            s.AutosaveIntervalSeconds = _settings.AutosaveIntervalSeconds;
             s.Filters = Filters.Select(f => f.Clone()).ToList();
             s.HiddenColumns = ColumnVisibility.Where(kv => !kv.Value).Select(kv => kv.Key).ToList();
             s.ShownColumns = ColumnVisibility.Where(kv => kv.Value).Select(kv => kv.Key).ToList();

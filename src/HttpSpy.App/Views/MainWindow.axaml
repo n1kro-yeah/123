@@ -181,6 +181,9 @@
                             <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}"
                                       InputGesture="Ctrl+S"/>
                             <Separator/>
+                            <MenuItem Header="Autosave capture" ToggleType="CheckBox"
+                                      IsChecked="{Binding AutosaveEnabled}"/>
+                            <Separator/>
                             <MenuItem Header="Import HAR / .http / capture…" Command="{Binding ImportTrafficCommand}"/>
                             <MenuItem Header="Import cURL from clipboard" Command="{Binding ImportCurlFromClipboardCommand}"
                                       InputGesture="Ctrl+Shift+V"/>
@@ -265,8 +268,13 @@
                                Classes.warning="{Binding !IsCertTrusted}"/>
                 </Border>
 
-                <TextBlock Grid.Column="3" Text="{Binding StatsText}" Classes="mono muted"
-                           VerticalAlignment="Center" Margin="14,0,0,0"/>
+                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center"
+                            Margin="14,0,0,0">
+                    <TextBlock Text="{Binding AutosaveStatus}" Classes="muted" FontSize="11"
+                               IsVisible="{Binding AutosaveEnabled}"
+                               ToolTip.Tip="The capture is snapshotted periodically and offered back after an unclean exit"/>
+                    <TextBlock Text="{Binding StatsText}" Classes="mono muted"/>
+                </StackPanel>
             </Grid>
         </Border>
 

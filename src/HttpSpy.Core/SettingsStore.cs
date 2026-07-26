@@ -36,6 +36,14 @@ public sealed class HttpSpySettings
 
     public bool AutoScroll { get; set; } = true;
 
+    /// <summary>
+    /// Snapshot the live capture periodically so an unclean exit is recoverable.
+    /// </summary>
+    public bool AutosaveEnabled { get; set; } = true;
+
+    /// <summary>Seconds between autosave snapshots. Clamped when read back.</summary>
+    public int AutosaveIntervalSeconds { get; set; } = 30;
+
     /// <summary>Persisted visibility of the optional session-grid columns.</summary>
     public List<string> HiddenColumns { get; set; } = new();
 
