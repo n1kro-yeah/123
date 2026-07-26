@@ -221,8 +221,9 @@
                     <DropDownButton.Flyout>
                         <MenuFlyout>
                             <MenuItem Header="Trust root certificate" Command="{Binding InstallCertificateCommand}"/>
-                            <MenuItem Header="Export root certificate (.cer)…" Command="{Binding ExportCertificateCommand}"/>
+                            <MenuItem Header="Export root certificate (.pem / .cer)…" Command="{Binding ExportCertificateCommand}"/>
                             <MenuItem Header="Certificate info / copy thumbprint" Command="{Binding ShowCertificateInfoCommand}"/>
+                            <MenuItem Header="Setup guide for this platform…" Command="{Binding ShowSetupGuideCommand}"/>
                             <Separator/>
                             <MenuItem Header="Remove trust" Command="{Binding UninstallCertificateCommand}"/>
                         </MenuFlyout>

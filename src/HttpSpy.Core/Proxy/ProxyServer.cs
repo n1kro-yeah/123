@@ -26,6 +26,7 @@ internal sealed class ProxyServer : IDisposable
 
     private readonly ProxyEngine _engine;
     private readonly Upstream _upstream;
+    private readonly NetworkThrottle _throttle;
     private TcpListener? _listener;
     private TcpListener? _transparentListener;
     private TransparentRedirector? _redirector;
@@ -35,6 +36,7 @@ internal sealed class ProxyServer : IDisposable
     {
         _engine = engine;
         _upstream = new Upstream(engine.Options);
+        _throttle = new NetworkThrottle(engine.Options);
     }
 
     private ProxyOptions Options => _engine.Options;
@@ -118,7 +120,7 @@ internal sealed class ProxyServer : IDisposable
             int read = await stream.ReadAsync(peek, _ct).ConfigureAwait(false);
             if (read <= 0) return;
             var prefix = peek.AsSpan(0, read).ToArray();
-            var prefixed = new PrefixedStream(prefix, stream);
+            var prefixed = _throttle.Wrap(new PrefixedStream(prefix, stream));
 
             if (prefix[0] == 0x16) // TLS handshake record
             {
@@ -185,7 +187,11 @@ internal sealed class ProxyServer : IDisposable
 
             var conn = ClientConnection.Accept(client, _engine);
 
-            using var stream = client.GetStream();
+            // Wrapping the socket itself is what makes "Network simulation" apply
+            // uniformly: TLS records, HTTP/2 frames, WebSocket frames and tunnelled
+            // bytes all leave through this stream, so none of them can bypass the
+            // configured bandwidth ceiling.
+            using var stream = _throttle.Wrap(client.GetStream());
             var reader = new StreamReaderEx(stream);
 
             bool keepAlive = true;
@@ -291,7 +297,7 @@ internal sealed class ProxyServer : IDisposable
 
             if (sslClient.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2)
             {
-                var h2 = new Http2.Http2Connection(_engine, _upstream, sslClient, host, port, conn, _ct);
+                var h2 = new Http2.Http2Connection(_engine, _upstream, sslClient, host, port, conn, _throttle, _ct);
                 await h2.RunAsync().ConfigureAwait(false);
                 return;
             }
@@ -609,7 +615,8 @@ internal sealed class ProxyServer : IDisposable
 
             var responseBytes = HttpWire.SerializeResponse(respHead.Version, session.StatusCode,
                 session.StatusText, session.ResponseHeaders, session.ResponseBody);
-            await WriteThrottledAsync(clientStream, responseBytes).ConfigureAwait(false);
+            await _throttle.DelayAsync(_ct).ConfigureAwait(false);
+            await clientStream.WriteAsync(responseBytes, _ct).ConfigureAwait(false);
 
             sw.Stop();
             session.Timings.TotalMs = sw.Elapsed.TotalMilliseconds;
@@ -630,6 +637,10 @@ internal sealed class ProxyServer : IDisposable
         outHeaders.Set("Connection", "keep-alive");
         var headBytes = HttpWire.SerializeResponse(respHead.Version, respHead.StatusCode,
             respHead.ReasonPhrase, outHeaders, Array.Empty<byte>());
+        // Latency is charged once, when the stream opens — an event stream that
+        // stuttered by the configured delay on every chunk would be simulating
+        // something quite different from a slow link.
+        await _throttle.DelayAsync(_ct).ConfigureAwait(false);
         await clientStream.WriteAsync(headBytes, _ct).ConfigureAwait(false);
         _engine.RaiseUpdated(session);
 
@@ -754,6 +765,7 @@ internal sealed class ProxyServer : IDisposable
         headers.Add("Connection", keepAlive ? "keep-alive" : "close");
         headers.Add("X-HttpSpy-AutoReply", "1");
         var bytes = HttpWire.SerializeResponse("HTTP/1.1", reply.Status, reply.Reason, headers, reply.Body);
+        await _throttle.DelayAsync(_ct).ConfigureAwait(false);
         await clientStream.WriteAsync(bytes, _ct).ConfigureAwait(false);
 
         session.StatusCode = reply.Status;
@@ -763,35 +775,6 @@ internal sealed class ProxyServer : IDisposable
         session.State = SessionState.Completed;
         session.EndTime = DateTime.Now;
         _engine.RaiseCompleted(session);
-    }
-
-    /// <summary>
-    /// Writes a response to the client, optionally injecting latency and rate-limiting
-    /// throughput to simulate slow networks (the "Network simulation" feature).
-    /// </summary>
-    private async Task WriteThrottledAsync(Stream stream, byte[] data)
-    {
-        var opt = Options;
-        if (opt.ExtraLatencyMs > 0 && opt.ThrottleEnabled)
-            await Task.Delay(opt.ExtraLatencyMs, _ct).ConfigureAwait(false);
-
-        if (!opt.ThrottleEnabled || opt.ThrottleKbps <= 0)
-        {
-            await stream.WriteAsync(data, _ct).ConfigureAwait(false);
-            return;
-        }
-
-        double bytesPerSec = opt.ThrottleKbps * 1024.0 / 8.0;
-        int chunk = Math.Max(64, (int)(bytesPerSec / 20.0)); // ~50 ms slices
-        int offset = 0;
-        while (offset < data.Length)
-        {
-            int n = Math.Min(chunk, data.Length - offset);
-            await stream.WriteAsync(data.AsMemory(offset, n), _ct).ConfigureAwait(false);
-            await stream.FlushAsync(_ct).ConfigureAwait(false);
-            offset += n;
-            await Task.Delay(TimeSpan.FromSeconds(n / bytesPerSec), _ct).ConfigureAwait(false);
-        }
     }
 
     /// <summary>

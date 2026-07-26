@@ -86,11 +86,7 @@ public sealed class ProxyEngine : IDisposable
         _server = server;
         IsRunning = true;
 
-        if (Options.SetSystemProxy && OperatingSystem.IsWindows())
-        {
-            try { SystemProxy.Enable(Options.ListenAddress, Options.ListenPort); }
-            catch (Exception ex) { RaiseLog($"Failed to set system proxy: {ex.Message}"); }
-        }
+        if (Options.SetSystemProxy) EnableSystemProxy();
 
         RaiseLog($"HttpSpy proxy listening on {Options.ListenAddress}:{Options.ListenPort}");
     }
@@ -107,12 +103,46 @@ public sealed class ProxyEngine : IDisposable
         // tasks (and the client sockets they hold) would never unwind.
         ReleasePausedTransactions();
 
-        if (Options.SetSystemProxy && OperatingSystem.IsWindows())
-        {
-            try { SystemProxy.Disable(); }
-            catch (Exception ex) { RaiseLog($"Failed to clear system proxy: {ex.Message}"); }
-        }
+        if (Options.SetSystemProxy) DisableSystemProxy();
         RaiseLog("HttpSpy proxy stopped");
+    }
+
+    /// <summary>
+    /// Points the OS at the proxy where that can be done per-user and undone
+    /// again: the WinINET settings on Windows, the GNOME proxy settings on Linux.
+    /// Anywhere else the user is told which variables to export instead — see
+    /// <see cref="PlatformIntegration.ProxySteps"/>.
+    /// </summary>
+    private void EnableSystemProxy()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                SystemProxy.Enable(Options.ListenAddress, Options.ListenPort);
+            }
+            else if (OperatingSystem.IsLinux() && GSettings.IsAvailable)
+            {
+                GSettings.Enable(Options.ListenAddress, Options.ListenPort);
+                RaiseLog("GNOME proxy settings pointed at HttpSpy.");
+            }
+            else
+            {
+                RaiseLog($"No automatic system proxy on {PlatformIntegration.PlatformName}; " +
+                         $"export HTTPS_PROXY=http://{Options.ListenAddress}:{Options.ListenPort} instead.");
+            }
+        }
+        catch (Exception ex) { RaiseLog($"Failed to set system proxy: {ex.Message}"); }
+    }
+
+    private void DisableSystemProxy()
+    {
+        try
+        {
+            if (OperatingSystem.IsWindows()) SystemProxy.Disable();
+            else if (OperatingSystem.IsLinux() && GSettings.IsAvailable) GSettings.Disable();
+        }
+        catch (Exception ex) { RaiseLog($"Failed to clear system proxy: {ex.Message}"); }
     }
 
     private void ReleasePausedTransactions()

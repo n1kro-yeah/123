@@ -1218,11 +1218,55 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         }
         else
         {
-            await Dialogs.ShowMessageAsync("Trust the root certificate",
-                "Automatic trust-store installation is only implemented on Windows.\n\n" +
-                $"The root certificate is exported at:\n{_engine.CertificateAuthority.RootCertificatePath}\n\n" +
-                "Import it into your OS / browser trust store to decrypt HTTPS.");
+            // No user-writable trust store outside Windows, so hand over the exact
+            // commands for this platform instead of a shrug. The PEM is written
+            // next to the .cer because nothing outside Windows wants DER.
+            string pem = WriteRootPem();
+            await Dialogs.ShowMessageAsync($"Trust the root certificate on {PlatformIntegration.PlatformName}",
+                $"The root certificate is exported at:\n{pem}\n\n" +
+                PlatformIntegration.Render(PlatformIntegration.TrustSteps(pem)) +
+                "\n\n(Commands copied to the clipboard.)");
+            await Dialogs.SetClipboardAsync(
+                PlatformIntegration.Render(PlatformIntegration.TrustSteps(pem)));
+            RefreshCertStatus();
         }
+    }
+
+    /// <summary>
+    /// Writes the root CA in PEM form beside the DER copy and returns its path.
+    /// Every non-Windows trust mechanism — OpenSSL, curl, Node, the Linux CA
+    /// bundle, the macOS keychain importer — expects PEM.
+    /// </summary>
+    private string WriteRootPem()
+    {
+        var der = _engine.CertificateAuthority.RootCertificatePath;
+        var pem = Path.Combine(Path.GetDirectoryName(der) ?? ".", PlatformIntegration.SuggestedPemName);
+        PlatformIntegration.ExportPem(_engine.CertificateAuthority.RootCertificate, pem);
+        return pem;
+    }
+
+    /// <summary>
+    /// Shows everything needed to get traffic flowing through HttpSpy on this
+    /// machine: how to trust the CA and how to point clients at the proxy, with
+    /// the commands filled in for the current platform, port and paths.
+    /// </summary>
+    [RelayCommand]
+    private async Task ShowSetupGuide()
+    {
+        if (Dialogs is null) return;
+        string pem = WriteRootPem();
+        var text =
+            $"Platform: {PlatformIntegration.PlatformName}\n" +
+            $"Proxy:    {_engine.Options.ListenAddress}:{_engine.Options.ListenPort}\n" +
+            $"Root CA:  {pem}\n\n" +
+            "── Trust the HttpSpy root certificate ──\n" +
+            PlatformIntegration.Render(PlatformIntegration.TrustSteps(pem)) + "\n\n" +
+            "── Send traffic through HttpSpy ──\n" +
+            PlatformIntegration.Render(PlatformIntegration.ProxySteps(
+                _engine.Options.ListenAddress, _engine.Options.ListenPort));
+
+        await Dialogs.SetClipboardAsync(text);
+        await Dialogs.ShowMessageAsync("Setup guide", text + "\n\n(Copied to the clipboard.)");
     }
 
     /// <summary>Removes the HttpSpy root CA from the Windows trust store (after confirmation).</summary>
@@ -1232,8 +1276,18 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (Dialogs is null) return;
         if (!OperatingSystem.IsWindows())
         {
-            await Dialogs.ShowMessageAsync("Not supported",
-                "Removing the certificate automatically is only implemented on Windows.");
+            string pem = WriteRootPem();
+            await Dialogs.ShowMessageAsync($"Removing trust on {PlatformIntegration.PlatformName}",
+                PlatformIntegration.Current switch
+                {
+                    HostPlatform.Linux =>
+                        "sudo rm -f /usr/local/share/ca-certificates/httpspy.crt && sudo update-ca-certificates --fresh\n\n" +
+                        "Also unset SSL_CERT_FILE / NODE_EXTRA_CA_CERTS in any shell where you set them.",
+                    HostPlatform.MacOS =>
+                        $"sudo security delete-certificate -c HttpSpy /Library/Keychains/System.keychain\n\n" +
+                        $"(or drop the entry for {pem} from Keychain Access)",
+                    _ => "Remove the HttpSpy root certificate from your platform's trust store.",
+                });
             return;
         }
         if (!await Dialogs.ConfirmAsync("Remove trusted certificate",
@@ -1257,15 +1311,23 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private async Task ExportCertificate()
     {
         if (Dialogs is null) return;
-        var path = await Dialogs.SaveFileAsync("Export root certificate", "HttpSpyRootCA.cer",
-            new[] { ("Certificate", "cer") });
+        // Default to PEM on platforms whose tooling cannot read DER.
+        bool preferPem = PlatformIntegration.Current != HostPlatform.Windows;
+        var path = await Dialogs.SaveFileAsync("Export root certificate",
+            preferPem ? PlatformIntegration.SuggestedPemName : "HttpSpyRootCA.cer",
+            new[] { ("PEM certificate", "pem"), ("DER certificate", "cer"), ("Certificate", "crt") });
         if (path is null) return;
         try
         {
-            _engine.CertificateAuthority.ExportRootCertificate(path);
+            bool pem = path.EndsWith(".pem", StringComparison.OrdinalIgnoreCase) ||
+                       path.EndsWith(".crt", StringComparison.OrdinalIgnoreCase);
+            if (pem) PlatformIntegration.ExportPem(_engine.CertificateAuthority.RootCertificate, path);
+            else _engine.CertificateAuthority.ExportRootCertificate(path);
+
             StatusText = $"Root certificate exported to {path}";
             await Dialogs.ShowMessageAsync("Certificate exported",
                 $"The HttpSpy root certificate (public key only) was saved to:\n{path}\n\n" +
+                $"Format: {(pem ? "PEM — what OpenSSL, curl, Node and Linux trust stores expect" : "DER")}\n\n" +
                 "Import it into any device or browser that should trust HttpSpy.");
         }
         catch (Exception ex) { await Dialogs.ShowMessageAsync("Export failed", ex.Message); }
@@ -1283,29 +1345,39 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             $"Expires:    {ca.NotAfter:yyyy-MM-dd}\n" +
             $"Thumbprint: {ca.Thumbprint}\n\n" +
             $"Public .cer: {_engine.CertificateAuthority.RootCertificatePath}\n" +
-            (OperatingSystem.IsWindows()
-                ? (IsCertTrusted ? "Status: trusted in Windows Trusted Root store."
-                                 : "Status: NOT trusted yet — click \"Trust cert\".")
-                : "Status: trust-store check is Windows-only.");
+            PlatformIntegration.QueryTrust(_engine.CertificateAuthority.RootCertificate) switch
+            {
+                TrustState.Trusted => $"Status: trusted on {PlatformIntegration.PlatformName}.",
+                TrustState.NotTrusted => "Status: NOT trusted yet — click \"Trust cert\".",
+                _ => $"Status: no readable trust store on {PlatformIntegration.PlatformName} — " +
+                     "use \"Setup guide\" for the commands.",
+            };
         await Dialogs.SetClipboardAsync(ca.Thumbprint ?? "");
         await Dialogs.ShowMessageAsync("HttpSpy root certificate", info + "\n\n(Thumbprint copied to clipboard.)");
     }
 
-    /// <summary>Re-reads the Windows trust store and updates the status text + indicator.</summary>
+    /// <summary>
+    /// Re-reads whatever trust store this platform exposes and updates the status
+    /// indicator. An unreadable store reports "unknown" rather than "not trusted",
+    /// because a false alarm sends people chasing a problem they do not have.
+    /// </summary>
     public void RefreshCertStatus()
     {
-        if (!OperatingSystem.IsWindows())
+        switch (PlatformIntegration.QueryTrust(_engine.CertificateAuthority.RootCertificate))
         {
-            CertStatus = "🔒 HTTPS: trust .cer manually";
-            IsCertTrusted = false;
-            return;
+            case TrustState.Trusted:
+                IsCertTrusted = true;
+                CertStatus = "🔒 Root CA trusted";
+                break;
+            case TrustState.NotTrusted:
+                IsCertTrusted = false;
+                CertStatus = "⚠ Root CA not trusted";
+                break;
+            default:
+                IsCertTrusted = false;
+                CertStatus = "🔒 Root CA — trust unverified";
+                break;
         }
-        try
-        {
-            IsCertTrusted = CertTrust.IsInstalled(_engine.CertificateAuthority.RootCertificate);
-            CertStatus = IsCertTrusted ? "🔒 Root CA trusted" : "⚠ Root CA not trusted";
-        }
-        catch { /* ignore */ }
     }
 
     // ---- Breakpoints ---------------------------------------------------------

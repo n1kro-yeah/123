@@ -24,6 +24,7 @@ internal sealed class Http2Connection
 
     private readonly ProxyEngine _engine;
     private readonly Upstream _upstream;
+    private readonly NetworkThrottle _throttle;
     private readonly Stream _client;
     private readonly string _host;
     private readonly int _port;
@@ -49,11 +50,12 @@ internal sealed class Http2Connection
     }
 
     public Http2Connection(ProxyEngine engine, Upstream upstream, Stream client,
-        string host, int port, ClientConnection conn, CancellationToken ct)
+        string host, int port, ClientConnection conn, NetworkThrottle throttle, CancellationToken ct)
     {
         _engine = engine;
         _upstream = upstream;
         _client = client;
+        _throttle = throttle;
         _host = host;
         _port = port;
         _conn = conn;
@@ -412,6 +414,9 @@ internal sealed class Http2Connection
 
         byte[] block = _encoder.Encode(headerList);
         bool noBody = session.ResponseBody.Length == 0;
+        // Bandwidth is paced by the throttled client stream underneath the writer;
+        // the per-response latency belongs here, once per stream.
+        await _throttle.DelayAsync(_ct).ConfigureAwait(false);
         await _writer.WriteFrameAsync(Http2Frame.Headers(streamId, block, endStream: noBody, endHeaders: true), _ct)
             .ConfigureAwait(false);
         if (!noBody)

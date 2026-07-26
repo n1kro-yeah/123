@@ -40,6 +40,18 @@ public sealed class OptionsWindow : Window
             FontFamily = new FontFamily("Cascadia Mono,Consolas,monospace"),
         };
 
+        // The bandwidth and latency boxes are inert unless the master switch is on.
+        // Showing them enabled invites you to type a delay, apply, and see nothing
+        // happen — so they follow the checkbox instead.
+        void SyncThrottleInputs()
+        {
+            bool on = throttleEnabled.IsChecked == true;
+            kbps.IsEnabled = on;
+            latency.IsEnabled = on;
+        }
+        throttleEnabled.IsCheckedChanged += (_, _) => SyncThrottleInputs();
+        SyncThrottleInputs();
+
         var presets = new ComboBox { ItemsSource = vm.ThrottlePresets, SelectedIndex = 0, MinWidth = 180 };
         presets.SelectionChanged += (_, _) =>
         {
