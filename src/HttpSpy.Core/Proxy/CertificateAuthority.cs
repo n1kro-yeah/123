@@ -40,6 +40,13 @@ public sealed class CertificateAuthority : IDisposable
         return Path.Combine(baseDir, "HttpSpy", "Certificates");
     }
 
+    /// <summary>
+    /// Upper bound on cached leaf certificates. A browsing session touches
+    /// hundreds of hosts; without a bound the cache (and the RSA keys it pins)
+    /// grows for as long as the app runs.
+    /// </summary>
+    public int MaxCachedLeaves { get; set; } = 512;
+
     /// <summary>Returns (creating if necessary) a leaf certificate valid for the host.</summary>
     public X509Certificate2 GetCertificateForHost(string host)
     {
@@ -54,14 +61,49 @@ public sealed class CertificateAuthority : IDisposable
 
             var leaf = CreateLeafCertificate(host);
             _leafCache[host] = leaf;
+            _issueOrder.Enqueue(host);
+            TrimCache();
             return leaf;
         }
     }
 
+    private readonly Queue<string> _issueOrder = new();
+
+    /// <summary>Evicts the oldest leaves once the cache exceeds its bound. Caller holds <c>_gate</c>.</summary>
+    private void TrimCache()
+    {
+        while (_issueOrder.Count > MaxCachedLeaves)
+        {
+            var oldest = _issueOrder.Dequeue();
+            // Skip entries that were re-issued in the meantime; their newer key
+            // is still live and will be evicted by its own queue entry.
+            if (_issueOrder.Contains(oldest)) continue;
+            if (_leafCache.TryRemove(oldest, out var evicted))
+            {
+                try { evicted.Dispose(); } catch { /* ignore */ }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Normalises an authority to the DNS name a leaf should be issued for:
+    /// strips a trailing port, trailing dots and case. IPv6 literals keep their
+    /// colons (splitting on the first colon would mangle them).
+    /// </summary>
     private static string NormalizeHost(string host)
     {
-        int colon = host.IndexOf(':');
-        if (colon >= 0) host = host[..colon];
+        host = host.Trim();
+        if (host.StartsWith('['))
+        {
+            int close = host.IndexOf(']');
+            if (close > 0) return host[1..close].ToLowerInvariant();
+        }
+        else
+        {
+            // A single colon means host:port; several mean a bare IPv6 literal.
+            int colon = host.IndexOf(':');
+            if (colon >= 0 && colon == host.LastIndexOf(':')) host = host[..colon];
+        }
         return host.Trim('.').ToLowerInvariant();
     }
 
@@ -102,10 +144,30 @@ public sealed class CertificateAuthority : IDisposable
         // Persist a PFX (with key) for ourselves and a DER .cer for the user to trust.
         var pfx = cert.Export(X509ContentType.Pfx, "httpspy");
         File.WriteAllBytes(RootPfxPath, pfx);
+        RestrictToOwner(RootPfxPath);
         File.WriteAllBytes(RootCertificatePath, cert.Export(X509ContentType.Cert));
 
         return new X509Certificate2(pfx, "httpspy",
             X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+    }
+
+    /// <summary>
+    /// Tightens the file mode of the CA private key to owner-only on Unix. The
+    /// key can mint a certificate for any host, so it should not be world
+    /// readable in a shared home directory.
+    /// </summary>
+    private static void RestrictToOwner(string path)
+    {
+        if (OperatingSystem.IsWindows()) return; // ACLs already inherit from the user profile
+        try
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+        catch (Exception)
+        {
+            // Best effort — a filesystem that cannot express this (e.g. a mounted
+            // share) should not stop the CA from being created.
+        }
     }
 
     private X509Certificate2 CreateLeafCertificate(string host)
@@ -130,22 +192,29 @@ public sealed class CertificateAuthority : IDisposable
         }
         request.CertificateExtensions.Add(san.Build());
         request.CertificateExtensions.Add(new X509SubjectKeyIdentifierExtension(request.PublicKey, false));
+        // Chain building in some clients wants the issuer link spelled out.
+        request.CertificateExtensions.Add(
+            X509AuthorityKeyIdentifierExtension.CreateFromCertificate(RootCertificate,
+                includeKeyIdentifier: true, includeIssuerAndSerial: false));
 
         var serial = new byte[16];
         RandomNumberGenerator.Fill(serial);
+        serial[0] &= 0x7F; // keep the DER INTEGER positive
 
+        // Some clients (notably Chrome/Safari) reject server certificates whose
+        // validity exceeds 398 days, so stay inside that window.
         var notBefore = DateTimeOffset.UtcNow.AddDays(-1);
-        var notAfter = DateTimeOffset.UtcNow.AddYears(1);
+        var notAfter = DateTimeOffset.UtcNow.AddDays(397);
 
         using var issued = request.Create(RootCertificate, notBefore, notAfter, serial);
-        var withKey = issued.CopyWithPrivateKey(rsa);
+        using var withKey = issued.CopyWithPrivateKey(rsa);
 
         // Re-import through a PFX round-trip so the key is usable by SslStream on
-        // every platform (avoids ephemeral-key issues on Windows).
+        // every platform (avoids ephemeral-key issues on Windows). Deliberately
+        // *without* PersistKeySet: persisting would write a CNG key container to
+        // disk for every host visited and never clean it up.
         var exported = withKey.Export(X509ContentType.Pfx);
-        withKey.Dispose();
-        return new X509Certificate2(exported, (string?)null,
-            X509KeyStorageFlags.Exportable | X509KeyStorageFlags.PersistKeySet);
+        return new X509Certificate2(exported, (string?)null, X509KeyStorageFlags.Exportable);
     }
 
     /// <summary>Exports the public root certificate (DER) to the supplied path.</summary>

@@ -12,14 +12,20 @@
     <Application.Resources>
         <conv:HighlightToBrushConverter x:Key="HighlightToBrush"/>
         <conv:StatusToBrushConverter x:Key="StatusToBrush"/>
+        <conv:SeverityToBrushConverter x:Key="SeverityToBrush"/>
+        <conv:ScoreToBrushConverter x:Key="ScoreToBrush"/>
         <conv:KindToGlyphConverter x:Key="KindToGlyph"/>
         <conv:ByteSizeConverter x:Key="ByteSize"/>
+        <conv:DurationConverter x:Key="Duration"/>
         <conv:StringNotEmptyConverter x:Key="StringNotEmpty"/>
+        <conv:CountToBoolConverter x:Key="CountToBool"/>
         <conv:LogLineToBrushConverter x:Key="LogLineToBrush"/>
     </Application.Resources>
 
     <Application.Styles>
         <FluentTheme />
         <StyleInclude Source="avares://Avalonia.Controls.DataGrid/Themes/Fluent.xaml"/>
+        <!-- Loaded last so the HttpSpy design tokens win over the Fluent defaults. -->
+        <StyleInclude Source="avares://HttpSpy/Styles/HttpSpyTheme.axaml"/>
     </Application.Styles>
 </Application>

@@ -360,10 +360,13 @@ internal sealed class Http2Connection
 
         bool bodyForbidden = string.Equals(method, "HEAD", StringComparison.OrdinalIgnoreCase) ||
                              respHead.StatusCode is 204 or 304;
-        var rawBody = await HttpWire.ReadResponseBodyAsync(upReader, respHead.Headers, bodyForbidden, _ct)
+        var body = await HttpWire
+            .ReadResponseBodyAsync(upReader, respHead.Headers, bodyForbidden, _ct, _engine.Options.MaxBufferedBody)
             .ConfigureAwait(false);
+        var rawBody = body.Data;
+        session.ResponseBodyTruncated = body.Truncated;
         var encoding = respHead.Headers["Content-Encoding"];
-        var decoded = HttpWire.Decompress(rawBody, encoding);
+        var decoded = body.Truncated ? rawBody : HttpWire.Decompress(rawBody, encoding);
         bool wasDecoded = !ReferenceEquals(decoded, rawBody);
         respHead.Headers.Remove("Transfer-Encoding");
         if (wasDecoded) respHead.Headers.Remove("Content-Encoding");

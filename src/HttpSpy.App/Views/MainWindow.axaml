@@ -4,11 +4,11 @@
         xmlns:conv="using:HttpSpy.App.Converters"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        mc:Ignorable="d" d:DesignWidth="1280" d:DesignHeight="800"
+        mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="900"
         x:Class="HttpSpy.App.Views.MainWindow"
         x:Name="Root"
         x:DataType="vm:MainWindowViewModel"
-        Width="1280" Height="800"
+        Width="1440" Height="900" MinWidth="900" MinHeight="600"
         Icon="/Assets/httpspy.ico"
         Title="HttpSpy — HTTP/HTTPS Debugger">
 
@@ -26,40 +26,60 @@
         <KeyBinding Gesture="Ctrl+B" Command="{Binding ToggleBookmarkCommand}"/>
         <KeyBinding Gesture="F3" Command="{Binding FindNextCommand}"/>
         <KeyBinding Gesture="Ctrl+S" Command="{Binding SaveSessionCommand}"/>
+        <KeyBinding Gesture="Ctrl+O" Command="{Binding OpenSessionCommand}"/>
         <KeyBinding Gesture="Ctrl+Shift+L" Command="{Binding ClearAllFiltersCommand}"/>
+        <KeyBinding Gesture="Ctrl+Shift+A" Command="{Binding Analysis.RunAnalysisCommand}"/>
         <KeyBinding Gesture="Ctrl+D1" Command="{Binding SelectTabCommand}" CommandParameter="0"/>
         <KeyBinding Gesture="Ctrl+D2" Command="{Binding SelectTabCommand}" CommandParameter="1"/>
         <KeyBinding Gesture="Ctrl+D3" Command="{Binding SelectTabCommand}" CommandParameter="2"/>
         <KeyBinding Gesture="Ctrl+D4" Command="{Binding SelectTabCommand}" CommandParameter="3"/>
+        <KeyBinding Gesture="Ctrl+D5" Command="{Binding SelectTabCommand}" CommandParameter="4"/>
+        <KeyBinding Gesture="Ctrl+D6" Command="{Binding SelectTabCommand}" CommandParameter="5"/>
     </Window.KeyBindings>
 
     <DockPanel>
-        <!-- ===== Menu ===== -->
+        <!-- ================= Menu ================= -->
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="_File">
-                <MenuItem Header="Open session…" Command="{Binding OpenSessionCommand}"/>
+                <MenuItem Header="Open session…" Command="{Binding OpenSessionCommand}" InputGesture="Ctrl+O"/>
                 <MenuItem Header="Save session…" Command="{Binding SaveSessionCommand}" InputGesture="Ctrl+S"/>
                 <Separator/>
-                <MenuItem Header="Export HAR…" Command="{Binding ExportHarCommand}"/>
-                <MenuItem Header="Export CSV…" Command="{Binding ExportCsvCommand}"/>
-                <MenuItem Header="Export JSON…" Command="{Binding ExportJsonCommand}"/>
-                <MenuItem Header="Export XML…" Command="{Binding ExportXmlCommand}"/>
-                <MenuItem Header="Export TXT…" Command="{Binding ExportTxtCommand}"/>
-                <MenuItem Header="Save each session to separate files…" Command="{Binding ExportSeparateFilesCommand}"/>
+                <MenuItem Header="Export">
+                    <MenuItem Header="HAR 1.2…" Command="{Binding ExportHarCommand}"/>
+                    <MenuItem Header="CSV…" Command="{Binding ExportCsvCommand}"/>
+                    <MenuItem Header="JSON…" Command="{Binding ExportJsonCommand}"/>
+                    <MenuItem Header="XML…" Command="{Binding ExportXmlCommand}"/>
+                    <MenuItem Header="Plain text…" Command="{Binding ExportTxtCommand}"/>
+                    <Separator/>
+                    <MenuItem Header="One raw file per session…" Command="{Binding ExportSeparateFilesCommand}"/>
+                </MenuItem>
             </MenuItem>
+
             <MenuItem Header="_Capture">
+                <MenuItem Header="Start / Stop" Command="{Binding ToggleCaptureCommand}" InputGesture="F5"/>
+                <Separator/>
                 <MenuItem Header="Start" Command="{Binding StartCaptureCommand}"/>
                 <MenuItem Header="Stop" Command="{Binding StopCaptureCommand}"/>
-                <MenuItem Header="Start / Stop" Command="{Binding ToggleCaptureCommand}" InputGesture="F5"/>
-                <MenuItem Header="Clear" Command="{Binding ClearSessionsCommand}" InputGesture="Ctrl+L"/>
+                <Separator/>
+                <MenuItem Header="Clear all" Command="{Binding ClearSessionsCommand}" InputGesture="Ctrl+L"/>
+                <MenuItem Header="Remove filtered-out sessions" Command="{Binding DeleteFilteredOutCommand}"/>
+                <MenuItem Header="Keep only bookmarked" Command="{Binding KeepOnlyBookmarkedCommand}"/>
             </MenuItem>
+
             <MenuItem Header="_Session">
                 <MenuItem Header="Resend in Submitter" Command="{Binding ResendToSubmitterCommand}" InputGesture="Ctrl+R"/>
+                <Separator/>
                 <MenuItem Header="Copy URL" Command="{Binding CopyUrlCommand}" InputGesture="Ctrl+U"/>
                 <MenuItem Header="Copy as cURL" Command="{Binding CopyAsCurlCommand}" InputGesture="Ctrl+Shift+C"/>
+                <MenuItem Header="Copy response body" Command="{Binding CopyResponseBodyCommand}"/>
+                <MenuItem Header="Save response body…" Command="{Binding SaveResponseBodyCommand}"/>
+                <Separator/>
                 <MenuItem Header="Toggle bookmark" Command="{Binding ToggleBookmarkCommand}" InputGesture="Ctrl+B"/>
+                <MenuItem Header="Next bookmark" Command="{Binding NextBookmarkCommand}"/>
+                <Separator/>
                 <MenuItem Header="Delete" Command="{Binding DeleteSelectedCommand}" InputGesture="Delete"/>
             </MenuItem>
+
             <MenuItem Header="_View">
                 <MenuItem Header="Columns">
                     <MenuItem Header="Proto" ToggleType="CheckBox" IsChecked="{Binding ShowProtoColumn, Mode=TwoWay}"/>
@@ -70,11 +90,19 @@
                     <MenuItem Header="Process" ToggleType="CheckBox" IsChecked="{Binding ShowProcessColumn, Mode=TwoWay}"/>
                 </MenuItem>
                 <Separator/>
+                <MenuItem Header="Capture" Command="{Binding SelectTabCommand}" CommandParameter="0" InputGesture="Ctrl+1"/>
+                <MenuItem Header="Dashboard" Command="{Binding SelectTabCommand}" CommandParameter="1" InputGesture="Ctrl+2"/>
+                <MenuItem Header="Analysis" Command="{Binding SelectTabCommand}" CommandParameter="2" InputGesture="Ctrl+3"/>
+                <MenuItem Header="Submitter" Command="{Binding SelectTabCommand}" CommandParameter="3" InputGesture="Ctrl+4"/>
+                <MenuItem Header="Rules" Command="{Binding SelectTabCommand}" CommandParameter="4" InputGesture="Ctrl+5"/>
+                <MenuItem Header="Log" Command="{Binding SelectTabCommand}" CommandParameter="5" InputGesture="Ctrl+6"/>
+                <Separator/>
                 <MenuItem Header="Auto-scroll" ToggleType="CheckBox" IsChecked="{Binding AutoScroll, Mode=TwoWay}"/>
                 <MenuItem Header="Dark theme" ToggleType="CheckBox" IsChecked="{Binding IsDarkTheme, Mode=TwoWay}"/>
                 <Separator/>
                 <MenuItem Header="Clear all filters" Command="{Binding ClearAllFiltersCommand}" InputGesture="Ctrl+Shift+L"/>
             </MenuItem>
+
             <MenuItem Header="_HTTPS">
                 <MenuItem Header="Trust root certificate" Command="{Binding InstallCertificateCommand}"/>
                 <MenuItem Header="Export root certificate (.cer)…" Command="{Binding ExportCertificateCommand}"/>
@@ -82,50 +110,83 @@
                 <Separator/>
                 <MenuItem Header="Remove trust" Command="{Binding UninstallCertificateCommand}"/>
             </MenuItem>
+
             <MenuItem Header="_Tools">
+                <MenuItem Header="Analyse capture" Command="{Binding Analysis.RunAnalysisCommand}"
+                          InputGesture="Ctrl+Shift+A"/>
+                <Separator/>
                 <MenuItem Header="Options / Network simulation…" Command="{Binding OpenOptionsCommand}"/>
-                <MenuItem Header="Filters…" Command="{Binding OpenFiltersCommand}"/>
+                <MenuItem Header="Display filters…" Command="{Binding OpenFiltersCommand}"/>
                 <MenuItem Header="Converter (URL / Base64 / Hex / JSON)…" Command="{Binding OpenConverterCommand}"/>
+                <Separator/>
                 <MenuItem Header="Mark selected as compare baseline" Command="{Binding MarkForCompareCommand}"/>
                 <MenuItem Header="Compare selected with baseline" Command="{Binding CompareWithBaselineCommand}"/>
                 <Separator/>
                 <MenuItem Header="Toggle dark / light theme" Command="{Binding ToggleThemeCommand}"/>
             </MenuItem>
+
+            <MenuItem Header="_Help">
+                <MenuItem Header="Keyboard shortcuts" Command="{Binding ShowShortcutsCommand}"/>
+                <MenuItem Header="Getting started" Command="{Binding ShowGettingStartedCommand}"/>
+            </MenuItem>
         </Menu>
 
-        <!-- ===== Toolbar ===== -->
-        <Border DockPanel.Dock="Top" Background="#22000000" Padding="6">
-            <StackPanel Orientation="Horizontal" Spacing="6">
-                <Button Command="{Binding ToggleCaptureCommand}" MinWidth="110"
-                        ToolTip.Tip="Start / stop capturing traffic (F5)">
+        <!-- ================= Toolbar =================
+             WrapPanel, not StackPanel: the old horizontal StackPanel was wider
+             than the window at the default size, so the right-hand controls were
+             simply unreachable. This reflows instead of clipping. -->
+        <Border DockPanel.Dock="Top" Classes="toolbar">
+            <WrapPanel Classes="spaced">
+                <Button Command="{Binding ToggleCaptureCommand}" MinWidth="132"
+                        Classes.primary="{Binding !IsCapturing}"
+                        Classes.recording="{Binding IsCapturing}"
+                        ToolTip.Tip="Start or stop capturing traffic  (F5)">
                     <TextBlock>
                         <TextBlock.Text>
                             <Binding Path="IsCapturing">
                                 <Binding.Converter>
-                                    <conv:BoolToTextConverter TrueText="■ Stop capture" FalseText="● Start capture"/>
+                                    <conv:BoolToTextConverter TrueText="■  Stop capture" FalseText="●  Start capture"/>
                                 </Binding.Converter>
                             </Binding>
                         </TextBlock.Text>
                     </TextBlock>
                 </Button>
+
                 <Button Content="Clear" Command="{Binding ClearSessionsCommand}"
-                        ToolTip.Tip="Clear all captured sessions (Ctrl+L)"/>
-                <Button Content="Save" Command="{Binding SaveSessionCommand}"
-                        ToolTip.Tip="Save the capture to a .hspy session file (Ctrl+S)"/>
+                        ToolTip.Tip="Clear all captured sessions  (Ctrl+L)"/>
+
+                <Border Classes="vsep"/>
+
                 <Button Content="Open" Command="{Binding OpenSessionCommand}"
-                        ToolTip.Tip="Open a previously saved .hspy session file"/>
+                        ToolTip.Tip="Open a saved .hspy capture  (Ctrl+O)"/>
+                <Button Content="Save" Command="{Binding SaveSessionCommand}"
+                        ToolTip.Tip="Save this capture to a .hspy file  (Ctrl+S)"/>
                 <Button Content="Export HAR" Command="{Binding ExportHarCommand}"
-                        ToolTip.Tip="Export all sessions to a standard HAR archive"/>
-                <Separator Width="1" Background="#44FFFFFF" Margin="4,2"/>
-                <TextBlock Text="Port:" VerticalAlignment="Center"/>
+                        ToolTip.Tip="Export every session to a standard HAR 1.2 archive"/>
+
+                <Border Classes="vsep"/>
+
+                <TextBlock Text="Port" VerticalAlignment="Center" Classes="muted"/>
                 <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"
-                               FormatString="0" Width="110" Increment="1"
-                               ToolTip.Tip="TCP port the proxy listens on (default 8888). Applied on next Start."/>
+                               FormatString="0" Width="108" Increment="1" ShowButtonSpinner="False"
+                               ToolTip.Tip="TCP port the proxy listens on (default 8888). Takes effect the next time you start the capture."/>
+
                 <CheckBox Content="Decrypt HTTPS" IsChecked="{Binding DecryptHttps}"
-                          ToolTip.Tip="Enable MITM decryption of HTTPS traffic (requires the root certificate to be trusted)"/>
+                          ToolTip.Tip="MITM-decrypt HTTPS. Requires the HttpSpy root certificate to be trusted."/>
                 <CheckBox Content="System proxy" IsChecked="{Binding SetSystemProxy}"
-                          ToolTip.Tip="Route all Windows traffic through HttpSpy automatically while capturing"/>
-                <DropDownButton Content="🔒 Certificate"
+                          ToolTip.Tip="Point the Windows system proxy at HttpSpy while capturing"/>
+
+                <Border Classes="vsep"/>
+
+                <Button Classes="primary" Command="{Binding Analysis.RunAnalysisCommand}"
+                        ToolTip.Tip="Scan the capture for security, performance and correctness issues  (Ctrl+Shift+A)">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <TextBlock Text="⚗"/>
+                        <TextBlock Text="Analyse"/>
+                    </StackPanel>
+                </Button>
+
+                <DropDownButton Content="Certificate ▾"
                                 ToolTip.Tip="Trust, export or inspect the HttpSpy root certificate">
                     <DropDownButton.Flyout>
                         <MenuFlyout>
@@ -137,158 +198,257 @@
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
-                <Separator Width="1" Background="#44FFFFFF" Margin="4,2"/>
-                <Button Content="⚙ Options" Command="{Binding OpenOptionsCommand}"
-                        ToolTip.Tip="Network simulation, upstream proxy and TLS settings"/>
-                <Button Content="◑ Theme" Command="{Binding ToggleThemeCommand}"
+
+                <Button Content="⚙" Command="{Binding OpenOptionsCommand}" MinWidth="36"
+                        ToolTip.Tip="Options: network simulation, upstream proxy, TLS passthrough"/>
+                <Button Content="◑" Command="{Binding ToggleThemeCommand}" MinWidth="36"
                         ToolTip.Tip="Toggle dark / light theme"/>
-                <TextBlock Text="{Binding CertStatus}" VerticalAlignment="Center"
-                           Classes.trusted="{Binding IsCertTrusted}"
-                           ToolTip.Tip="HTTPS decryption is ready only when the root CA is trusted">
-                    <TextBlock.Styles>
-                        <Style Selector="TextBlock">
-                            <Setter Property="Foreground" Value="#FFD29922"/>
-                        </Style>
-                        <Style Selector="TextBlock.trusted">
-                            <Setter Property="Foreground" Value="#FF3FB950"/>
-                        </Style>
-                    </TextBlock.Styles>
-                </TextBlock>
-            </StackPanel>
+
+                <Border Classes="pill" VerticalAlignment="Center"
+                        Background="{DynamicResource SpySurfaceRaisedBrush}"
+                        ToolTip.Tip="HTTPS decryption only works once the HttpSpy root CA is trusted by the client">
+                    <TextBlock Text="{Binding CertStatus}"
+                               Classes.success="{Binding IsCertTrusted}"
+                               Classes.warning="{Binding !IsCertTrusted}"/>
+                </Border>
+            </WrapPanel>
         </Border>
 
-        <!-- ===== Status bar ===== -->
-        <Border DockPanel.Dock="Bottom" Background="#22000000" Padding="8,4">
-            <TextBlock Text="{Binding StatusText}" FontFamily="Cascadia Mono,Consolas,monospace"/>
+        <!-- ================= Status bar ================= -->
+        <Border DockPanel.Dock="Bottom" Classes="statusbar">
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Grid.Column="0" Text="{Binding StatusText}"
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding StatsText}" Classes="mono muted"
+                           VerticalAlignment="Center" Margin="16,0,0,0"/>
+            </Grid>
         </Border>
 
-        <!-- ===== Main tabs ===== -->
+        <!-- ================= Main tabs ================= -->
         <TabControl SelectedIndex="{Binding ActiveTabIndex}">
 
             <!-- ========== CAPTURE ========== -->
             <TabItem Header="Capture">
-                <Grid RowDefinitions="Auto,*">
-                    <!-- Filter bar -->
-                    <Border Grid.Row="0" Padding="6" Background="#11FFFFFF">
-                        <StackPanel Orientation="Horizontal" Spacing="8">
-                            <TextBlock Text="Filter:" VerticalAlignment="Center"/>
+                <Grid RowDefinitions="Auto,Auto,*">
+
+                    <!-- Filter bar: also a WrapPanel. At 1280px the old fixed-width
+                         row pushed Find/Bookmark past the right edge of the window. -->
+                    <Border Grid.Row="0" Classes="chrome" BorderThickness="0,0,0,1" Padding="10,7">
+                        <WrapPanel Classes="spaced">
                             <TextBox x:Name="FilterBox" Text="{Binding FilterText}"
-                                     Watermark="url / host / method / status / process  (Ctrl+F)"
-                                     Width="360"/>
+                                     Watermark="Filter: url, host, method, status, process   (Ctrl+F)"
+                                     Width="330"/>
                             <ComboBox ItemsSource="{Binding MethodFilters}" SelectedItem="{Binding MethodFilter}"
-                                      Width="110"/>
-                            <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnly}"/>
+                                      Width="104" ToolTip.Tip="Show only one HTTP method"/>
+                            <CheckBox Content="Errors only" IsChecked="{Binding ErrorsOnly}"
+                                      ToolTip.Tip="Show only 4xx / 5xx responses and failed transactions"/>
                             <CheckBox Content="Search bodies" IsChecked="{Binding SearchBodies}"
-                                      ToolTip.Tip="Also match the filter text inside request/response bodies"/>
-                            <CheckBox Content="Auto-scroll" IsChecked="{Binding AutoScroll}"/>
-                            <TextBlock Text="Group:" VerticalAlignment="Center"/>
+                                      ToolTip.Tip="Also match the filter text inside request/response bodies (slower)"/>
+                            <CheckBox Content="Auto-scroll" IsChecked="{Binding AutoScroll}"
+                                      ToolTip.Tip="Follow live capture by scrolling to each new session"/>
+
+                            <Border Classes="vsep"/>
+
+                            <TextBlock Text="Group" VerticalAlignment="Center" Classes="muted"/>
                             <ComboBox ItemsSource="{Binding GroupByOptions}" SelectedItem="{Binding GroupBy}"
-                                      Width="120" ToolTip.Tip="Group the grid into a tree by a column"/>
+                                      Width="118" ToolTip.Tip="Collapse the grid into a tree grouped by a column"/>
                             <Button Content="Filters…" Command="{Binding OpenFiltersCommand}"
-                                    ToolTip.Tip="Multi-rule show/hide filters (persisted)"/>
-                            <Separator Width="1" Background="#44FFFFFF" Margin="4,2"/>
-                            <TextBlock Text="Search:" VerticalAlignment="Center"/>
+                                    ToolTip.Tip="Stacked show/hide filter rules (persisted between runs)"/>
+
+                            <Border Classes="vsep"/>
+
                             <TextBox x:Name="SearchBox" Text="{Binding AdvancedSearchText}" Width="200"
-                                     Watermark="headers + body…  (Ctrl+Shift+F)"
-                                     ToolTip.Tip="Advanced search across headers and bodies of all sessions"/>
-                            <Button Content="Find Next" Command="{Binding FindNextCommand}"/>
-                            <Button Content="⮕ Bookmark" Command="{Binding NextBookmarkCommand}"
-                                    ToolTip.Tip="Jump to next bookmarked session"/>
+                                     Watermark="Search headers + bodies   (Ctrl+Shift+F)"
+                                     ToolTip.Tip="Full-text search across the URL, headers and bodies of every session"/>
+                            <Button Content="Find next" Command="{Binding FindNextCommand}"
+                                    ToolTip.Tip="Jump to the next matching session  (F3)"/>
+                            <Button Content="★ Next" Command="{Binding NextBookmarkCommand}"
+                                    ToolTip.Tip="Jump to the next bookmarked session"/>
                             <TextBlock Text="{Binding AdvancedSearchStatus}" VerticalAlignment="Center"
-                                       Foreground="#FFB0C4DE" MinWidth="70"/>
-                        </StackPanel>
+                                       Classes="muted" MinWidth="76"/>
+                        </WrapPanel>
                     </Border>
 
                     <!-- Breakpoint banner -->
-                    <Grid Grid.Row="1" RowDefinitions="Auto,*,4,*">
-                        <Border Grid.Row="0" Background="#553311" Padding="8"
-                                IsVisible="{Binding CurrentBreakpoint, Converter={x:Static ObjectConverters.IsNotNull}}">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Spacing="10">
-                                    <TextBlock Text="⏸" FontSize="16"/>
-                                    <TextBlock Text="{Binding CurrentBreakpoint.PhaseLabel}" FontWeight="Bold"
-                                               VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding CurrentBreakpoint.StatusLine}" VerticalAlignment="Center"/>
-                                    <Button Content="Continue" Command="{Binding ContinueBreakpointCommand}"/>
-                                    <Button Content="Abort" Command="{Binding AbortBreakpointCommand}"/>
+                    <Border Grid.Row="1" Classes="breakpoint"
+                            IsVisible="{Binding CurrentBreakpoint, Converter={x:Static ObjectConverters.IsNotNull}}">
+                        <StackPanel Spacing="7">
+                            <Grid ColumnDefinitions="Auto,Auto,*,Auto,Auto">
+                                <TextBlock Grid.Column="0" Text="⏸" FontSize="17" VerticalAlignment="Center"
+                                           Margin="0,0,10,0"/>
+                                <TextBlock Grid.Column="1" Text="{Binding CurrentBreakpoint.PhaseLabel}"
+                                           FontWeight="Bold" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <TextBlock Grid.Column="2" Text="{Binding CurrentBreakpoint.StatusLine}"
+                                           VerticalAlignment="Center" Classes="mono"
+                                           TextTrimming="CharacterEllipsis"/>
+                                <Button Grid.Column="3" Classes="primary" Content="Continue"
+                                        Command="{Binding ContinueBreakpointCommand}" Margin="8,0,6,0"/>
+                                <Button Grid.Column="4" Classes="danger" Content="Abort"
+                                        Command="{Binding AbortBreakpointCommand}"/>
+                            </Grid>
+                            <Grid ColumnDefinitions="*,8,*">
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Headers" Classes="fieldLabel"/>
+                                    <TextBox Text="{Binding CurrentBreakpoint.HeadersText}" AcceptsReturn="True"
+                                             Height="86" Classes="mono"/>
                                 </StackPanel>
-                                <TextBox Text="{Binding CurrentBreakpoint.HeadersText}" AcceptsReturn="True"
-                                         Height="80" FontFamily="Cascadia Mono,Consolas,monospace" Margin="0,4,0,0"/>
-                                <TextBox Text="{Binding CurrentBreakpoint.BodyText}" AcceptsReturn="True"
-                                         Height="80" FontFamily="Cascadia Mono,Consolas,monospace" Margin="0,4,0,0"/>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Body" Classes="fieldLabel"/>
+                                    <TextBox Text="{Binding CurrentBreakpoint.BodyText}" AcceptsReturn="True"
+                                             Height="86" Classes="mono"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Grid + inspector -->
+                    <Grid Grid.Row="2" RowDefinitions="3*,5,2*">
+                        <Panel Grid.Row="0">
+                            <DataGrid x:Name="SessionGrid"
+                                      ItemsSource="{Binding SessionsView}"
+                                      SelectedItem="{Binding SelectedSession}"
+                                      IsReadOnly="True" CanUserResizeColumns="True"
+                                      CanUserSortColumns="True"
+                                      GridLinesVisibility="Horizontal" SelectionMode="Single">
+                                <DataGrid.Styles>
+                                    <!-- Highlight rules paint the row background. This binding is
+                                         what makes the whole highlighting feature visible: the
+                                         converter existed but was never referenced by any view. -->
+                                    <Style Selector="DataGridRow">
+                                        <Setter Property="Background"
+                                                Value="{Binding HighlightColor, Converter={StaticResource HighlightToBrush}}"/>
+                                        <Setter Property="ToolTip.Tip" Value="{Binding RowTooltip}"/>
+                                    </Style>
+                                </DataGrid.Styles>
+
+                                <DataGrid.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="Resend in Submitter" InputGesture="Ctrl+R"
+                                                  Command="{Binding #Root.DataContext.ResendToSubmitterCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Copy">
+                                            <MenuItem Header="URL" InputGesture="Ctrl+U"
+                                                      Command="{Binding #Root.DataContext.CopyUrlCommand}"/>
+                                            <MenuItem Header="As cURL" InputGesture="Ctrl+Shift+C"
+                                                      Command="{Binding #Root.DataContext.CopyAsCurlCommand}"/>
+                                            <MenuItem Header="Response body"
+                                                      Command="{Binding #Root.DataContext.CopyResponseBodyCommand}"/>
+                                            <MenuItem Header="Request body"
+                                                      Command="{Binding #Root.DataContext.CopyRequestBodyCommand}"/>
+                                        </MenuItem>
+                                        <MenuItem Header="Save response body…"
+                                                  Command="{Binding #Root.DataContext.SaveResponseBodyCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Apply as filter">
+                                            <MenuItem Header="Focus on this host"
+                                                      Command="{Binding #Root.DataContext.FocusHostCommand}"/>
+                                            <MenuItem Header="Hide this host"
+                                                      Command="{Binding #Root.DataContext.HideHostCommand}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Focus on this process"
+                                                      Command="{Binding #Root.DataContext.FocusProcessCommand}"/>
+                                            <MenuItem Header="Hide this process"
+                                                      Command="{Binding #Root.DataContext.HideProcessCommand}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Only this status code"
+                                                      Command="{Binding #Root.DataContext.FocusStatusCommand}"/>
+                                            <MenuItem Header="Only this content type"
+                                                      Command="{Binding #Root.DataContext.FocusContentTypeCommand}"/>
+                                            <Separator/>
+                                            <MenuItem Header="Clear all filters" InputGesture="Ctrl+Shift+L"
+                                                      Command="{Binding #Root.DataContext.ClearAllFiltersCommand}"/>
+                                        </MenuItem>
+                                        <Separator/>
+                                        <MenuItem Header="Toggle bookmark" InputGesture="Ctrl+B"
+                                                  Command="{Binding #Root.DataContext.ToggleBookmarkCommand}"/>
+                                        <MenuItem Header="Mark as compare baseline"
+                                                  Command="{Binding #Root.DataContext.MarkForCompareCommand}"/>
+                                        <MenuItem Header="Compare with baseline"
+                                                  Command="{Binding #Root.DataContext.CompareWithBaselineCommand}"/>
+                                        <Separator/>
+                                        <MenuItem Header="Delete" InputGesture="Delete"
+                                                  Command="{Binding #Root.DataContext.DeleteSelectedCommand}"/>
+                                        <MenuItem Header="Remove filtered-out sessions"
+                                                  Command="{Binding #Root.DataContext.DeleteFilteredOutCommand}"/>
+                                    </ContextMenu>
+                                </DataGrid.ContextMenu>
+
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="56"/>
+
+                                    <!-- Bookmark marker: previously the bookmark flag had no
+                                         representation in the grid at all. -->
+                                    <DataGridTemplateColumn Header="★" Width="34" CanUserSort="True"
+                                                            SortMemberPath="Bookmarked">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate x:DataType="vm:SessionViewModel">
+                                                <TextBlock Text="{Binding BookmarkGlyph}" FontSize="13"
+                                                           Foreground="{DynamicResource SpyWarningBrush}"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+
+                                    <DataGridTextColumn Header="Proto" Binding="{Binding SchemeGlyph}" Width="80"/>
+                                    <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="98"/>
+
+                                    <!-- Status as a colour-coded pill so 2xx/4xx/5xx are
+                                         distinguishable at a glance while scrolling. -->
+                                    <DataGridTemplateColumn Header="Result" Width="126" SortMemberPath="StatusCode">
+                                        <DataGridTemplateColumn.CellTemplate>
+                                            <DataTemplate x:DataType="vm:SessionViewModel">
+                                                <StackPanel Orientation="Horizontal" Spacing="6"
+                                                            VerticalAlignment="Center">
+                                                    <Border Classes="pill" Padding="7,0"
+                                                            Background="{Binding StatusCode, Converter={StaticResource StatusToBrush}, ConverterParameter=soft}">
+                                                        <TextBlock Text="{Binding StatusCodeText}"
+                                                                   Foreground="{Binding StatusCode, Converter={StaticResource StatusToBrush}}"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Flags}" FontSize="11"
+                                                               VerticalAlignment="Center" Opacity="0.75"/>
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </DataGridTemplateColumn.CellTemplate>
+                                    </DataGridTemplateColumn>
+
+                                    <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="200"/>
+                                    <DataGridTextColumn Header="URL" Binding="{Binding PathAndQuery}" Width="*"/>
+                                    <DataGridTextColumn Header="Type" Binding="{Binding ContentType}" Width="146"/>
+                                    <DataGridTextColumn Header="Size"
+                                                        Binding="{Binding Size, Converter={StaticResource ByteSize}}"
+                                                        Width="82"/>
+                                    <DataGridTextColumn Header="Time"
+                                                        Binding="{Binding DurationMs, Converter={StaticResource Duration}}"
+                                                        Width="82"/>
+                                    <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="122"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+
+                            <!-- Empty state, shown until the first session arrives -->
+                            <StackPanel Classes="empty-state" IsHitTestVisible="False"
+                                        IsVisible="{Binding !HasSessions}">
+                                <TextBlock Text="◎" Classes="glyph"/>
+                                <TextBlock Text="No traffic captured yet" Classes="title"/>
+                                <TextBlock Text="Press F5 (or “Start capture”), then send traffic through 127.0.0.1 on the port shown in the toolbar. To decrypt HTTPS, first use Certificate ▸ Trust root certificate."/>
                             </StackPanel>
-                        </Border>
+                        </Panel>
 
-                        <!-- Session grid -->
-                        <DataGrid Grid.Row="1" x:Name="SessionGrid"
-                                  ItemsSource="{Binding SessionsView}"
-                                  SelectedItem="{Binding SelectedSession}"
-                                  IsReadOnly="True" CanUserResizeColumns="True"
-                                  CanUserSortColumns="True"
-                                  GridLinesVisibility="Horizontal" SelectionMode="Single"
-                                  FontSize="12">
-                            <DataGrid.ContextMenu>
-                                <ContextMenu>
-                                    <MenuItem Header="Resend in Submitter" Command="{Binding #Root.DataContext.ResendToSubmitterCommand}"/>
-                                    <Separator/>
-                                    <MenuItem Header="Copy URL" Command="{Binding #Root.DataContext.CopyUrlCommand}"/>
-                                    <MenuItem Header="Copy as cURL" Command="{Binding #Root.DataContext.CopyAsCurlCommand}"/>
-                                    <MenuItem Header="Copy response body" Command="{Binding #Root.DataContext.CopyResponseBodyCommand}"/>
-                                    <MenuItem Header="Save response body…" Command="{Binding #Root.DataContext.SaveResponseBodyCommand}"/>
-                                    <Separator/>
-                                    <MenuItem Header="Apply as filter">
-                                        <MenuItem Header="Focus on this host" Command="{Binding #Root.DataContext.FocusHostCommand}"/>
-                                        <MenuItem Header="Hide this host" Command="{Binding #Root.DataContext.HideHostCommand}"/>
-                                        <Separator/>
-                                        <MenuItem Header="Focus on this process" Command="{Binding #Root.DataContext.FocusProcessCommand}"/>
-                                        <MenuItem Header="Hide this process" Command="{Binding #Root.DataContext.HideProcessCommand}"/>
-                                        <Separator/>
-                                        <MenuItem Header="Only this status code" Command="{Binding #Root.DataContext.FocusStatusCommand}"/>
-                                        <MenuItem Header="Only this content type" Command="{Binding #Root.DataContext.FocusContentTypeCommand}"/>
-                                        <Separator/>
-                                        <MenuItem Header="Clear all filters" Command="{Binding #Root.DataContext.ClearAllFiltersCommand}"/>
-                                    </MenuItem>
-                                    <Separator/>
-                                    <MenuItem Header="Toggle bookmark" Command="{Binding #Root.DataContext.ToggleBookmarkCommand}"/>
-                                    <MenuItem Header="Mark as compare baseline" Command="{Binding #Root.DataContext.MarkForCompareCommand}"/>
-                                    <MenuItem Header="Compare with baseline" Command="{Binding #Root.DataContext.CompareWithBaselineCommand}"/>
-                                    <Separator/>
-                                    <MenuItem Header="Delete" Command="{Binding #Root.DataContext.DeleteSelectedCommand}"/>
-                                </ContextMenu>
-                            </DataGrid.ContextMenu>
-                            <DataGrid.Columns>
-                                <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="55"/>
-                                <DataGridTextColumn Header="Proto" Binding="{Binding SchemeGlyph}" Width="72"/>
-                                <DataGridTextColumn Header="Method" Binding="{Binding Method}" Width="75"/>
-                                <DataGridTextColumn Header="Result" Binding="{Binding StatusDisplay}" Width="120"/>
-                                <DataGridTextColumn Header="Host" Binding="{Binding Host}" Width="190"/>
-                                <DataGridTextColumn Header="URL" Binding="{Binding PathAndQuery}" Width="*"/>
-                                <DataGridTextColumn Header="Type" Binding="{Binding ContentType}" Width="150"/>
-                                <DataGridTextColumn Header="Size" Binding="{Binding Size, Converter={StaticResource ByteSize}}" Width="80"/>
-                                <DataGridTextColumn Header="Time" Binding="{Binding DurationMs, StringFormat='{}{0:F0} ms'}" Width="80"/>
-                                <DataGridTextColumn Header="Process" Binding="{Binding ProcessName}" Width="120"/>
-                            </DataGrid.Columns>
-                        </DataGrid>
-
-                        <!-- Empty state: shown until the first session is captured -->
-                        <Border Grid.Row="1" IsHitTestVisible="False"
-                                IsVisible="{Binding !HasSessions}">
-                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10"
-                                        MaxWidth="460">
-                                <TextBlock Text="🔍" FontSize="48" HorizontalAlignment="Center" Opacity="0.5"/>
-                                <TextBlock Text="No sessions captured yet"
-                                           FontSize="18" FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" Opacity="0.85"/>
-                                <TextBlock TextWrapping="Wrap" TextAlignment="Center" Opacity="0.6"
-                                           Text="Press F5 (or “Start capture”) and route traffic through the proxy on 127.0.0.1 at the chosen port. For HTTPS, click 🔒 Certificate ▸ Trust root certificate first."/>
-                            </StackPanel>
-                        </Border>
-
-                        <GridSplitter Grid.Row="2" Height="4" HorizontalAlignment="Stretch" Background="#33FFFFFF"/>
+                        <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch"
+                                      ResizeDirection="Rows"/>
 
                         <!-- Inspector -->
-                        <Border Grid.Row="3" BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0">
-                            <ContentControl Content="{Binding Inspector}"/>
+                        <Border Grid.Row="2" BorderBrush="{DynamicResource SpyBorderBrush}"
+                                BorderThickness="0,1,0,0">
+                            <Panel>
+                                <ContentControl Content="{Binding Inspector}"
+                                                IsVisible="{Binding SelectedSession, Converter={x:Static ObjectConverters.IsNotNull}}"/>
+                                <StackPanel Classes="empty-state"
+                                            IsVisible="{Binding SelectedSession, Converter={x:Static ObjectConverters.IsNull}}">
+                                    <TextBlock Text="◱" Classes="glyph"/>
+                                    <TextBlock Text="Select a session to inspect it"/>
+                                    <TextBlock Text="Headers, cookies, query and form fields, the decoded body, a JSON tree, the timing waterfall and generated client code all appear here."/>
+                                </StackPanel>
+                            </Panel>
                         </Border>
                     </Grid>
                 </Grid>
@@ -296,7 +456,22 @@
 
             <!-- ========== DASHBOARD ========== -->
             <TabItem Header="Dashboard">
-                <ContentControl Content="{Binding Dashboard}"/>
+                <DockPanel>
+                    <Border DockPanel.Dock="Top" Classes="toolbar">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <Button Content="↻ Refresh" Command="{Binding RefreshDashboardCommand}"
+                                    ToolTip.Tip="Recompute the charts over the current capture"/>
+                            <TextBlock Classes="muted" VerticalAlignment="Center"
+                                       Text="Charts are computed when you open this tab or press Refresh."/>
+                        </StackPanel>
+                    </Border>
+                    <ContentControl Content="{Binding Dashboard}"/>
+                </DockPanel>
+            </TabItem>
+
+            <!-- ========== ANALYSIS ========== -->
+            <TabItem Header="Analysis">
+                <ContentControl Content="{Binding Analysis}"/>
             </TabItem>
 
             <!-- ========== SUBMITTER ========== -->
@@ -305,123 +480,197 @@
             </TabItem>
 
             <!-- ========== RULES ========== -->
-            <TabItem Header="Rules &amp; Breakpoints">
-                <Grid ColumnDefinitions="320,4,*" Margin="6">
+            <TabItem Header="Rules">
+                <Grid ColumnDefinitions="340,5,*" Margin="10">
                     <DockPanel Grid.Column="0">
-                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
+                        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,8">
                             <Button Content="Add" Command="{Binding AddRuleCommand}"/>
-                            <Button Content="Remove" Command="{Binding RemoveRuleCommand}"/>
-                            <Button Content="Apply" Command="{Binding ApplyRulesCommand}"/>
+                            <Button Content="Remove" Classes="danger" Command="{Binding RemoveRuleCommand}"/>
+                            <Button Classes="primary" Content="Apply" Command="{Binding ApplyRulesCommand}"
+                                    ToolTip.Tip="Push the rule set to the live capture engine and save it"/>
                         </StackPanel>
                         <ListBox ItemsSource="{Binding Rules}" SelectedItem="{Binding SelectedRule}">
                             <ListBox.ItemTemplate>
-                                <DataTemplate>
-                                    <TextBlock Text="{Binding Summary}"/>
+                                <DataTemplate x:DataType="vm:RuleViewModel">
+                                    <StackPanel Spacing="1">
+                                        <TextBlock Text="{Binding Summary}" TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding PatternError}" Classes="danger" FontSize="11"
+                                                   TextWrapping="Wrap"
+                                                   IsVisible="{Binding PatternError, Converter={StaticResource StringNotEmpty}}"/>
+                                    </StackPanel>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
                         </ListBox>
                     </DockPanel>
 
-                    <GridSplitter Grid.Column="1" Width="4" Background="#33FFFFFF"/>
+                    <GridSplitter Grid.Column="1" Width="5" ResizeDirection="Columns"/>
 
-                    <ScrollViewer Grid.Column="2" Margin="8,0,0,0">
-                        <StackPanel Spacing="8" DataContext="{Binding SelectedRule}"
-                                    IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
-                            <TextBlock Text="Rule editor" FontWeight="Bold" FontSize="15"/>
-                            <CheckBox Content="Enabled" IsChecked="{Binding Enabled}"/>
-                            <TextBlock Text="Name"/>
-                            <TextBox Text="{Binding Name}"/>
-                            <TextBlock Text="Action"/>
-                            <ComboBox ItemsSource="{Binding Actions}" SelectedIndex="{Binding ActionIndex}" HorizontalAlignment="Left" MinWidth="200"/>
-                            <TextBlock Text="URL match mode"/>
-                            <ComboBox ItemsSource="{Binding MatchModes}" SelectedIndex="{Binding MatchModeIndex}" HorizontalAlignment="Left" MinWidth="200"/>
-                            <TextBlock Text="URL pattern"/>
-                            <TextBox Text="{Binding UrlPattern}"/>
-                            <TextBlock Text="Method filter (optional)"/>
-                            <TextBox Text="{Binding MethodFilter}"/>
-                            <TextBlock Text="Redirect URL (Redirect action)"/>
-                            <TextBox Text="{Binding RedirectUrl}"/>
-                            <TextBlock Text="Auto-Reply status / content-type / body"/>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <NumericUpDown Value="{Binding AutoReplyStatus}" Minimum="100" Maximum="599" FormatString="0" Width="120"/>
-                                <TextBox Text="{Binding AutoReplyContentType}" Width="200"/>
+                    <Panel Grid.Column="2" Margin="10,0,0,0">
+                        <ScrollViewer>
+                            <StackPanel Spacing="4" DataContext="{Binding SelectedRule}"
+                                        IsVisible="{Binding Converter={x:Static ObjectConverters.IsNotNull}}">
+                                <TextBlock Text="Rule editor" Classes="h1"/>
+                                <CheckBox Content="Enabled" IsChecked="{Binding Enabled}" Margin="0,4"/>
+
+                                <TextBlock Text="Name" Classes="fieldLabel"/>
+                                <TextBox Text="{Binding Name}"/>
+
+                                <TextBlock Text="Action" Classes="fieldLabel"/>
+                                <ComboBox ItemsSource="{Binding Actions}" SelectedIndex="{Binding ActionIndex}"
+                                          HorizontalAlignment="Left" MinWidth="230"/>
+
+                                <TextBlock Text="URL match mode" Classes="fieldLabel"/>
+                                <ComboBox ItemsSource="{Binding MatchModes}" SelectedIndex="{Binding MatchModeIndex}"
+                                          HorizontalAlignment="Left" MinWidth="230"/>
+
+                                <TextBlock Text="URL pattern" Classes="fieldLabel"/>
+                                <TextBox Text="{Binding UrlPattern}" Classes="mono"/>
+                                <TextBlock Text="{Binding PatternError}" Classes="danger" FontSize="11"
+                                           TextWrapping="Wrap"
+                                           IsVisible="{Binding PatternError, Converter={StaticResource StringNotEmpty}}"/>
+
+                                <TextBlock Text="Method filter (optional)" Classes="fieldLabel"/>
+                                <TextBox Text="{Binding MethodFilter}" Watermark="GET"/>
+
+                                <TextBlock Text="Redirect URL — Redirect action" Classes="fieldLabel"/>
+                                <TextBox Text="{Binding RedirectUrl}" Classes="mono"
+                                         Watermark="https://staging.example.com/api"/>
+
+                                <TextBlock Text="Auto-Reply — status, content type and body" Classes="fieldLabel"/>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <NumericUpDown Value="{Binding AutoReplyStatus}" Minimum="100" Maximum="599"
+                                                   FormatString="0" Width="118"/>
+                                    <TextBox Text="{Binding AutoReplyContentType}" Width="230"
+                                             Watermark="application/json"/>
+                                </StackPanel>
+                                <TextBox Text="{Binding AutoReplyBody}" AcceptsReturn="True" Height="110"
+                                         Classes="mono"/>
+
+                                <TextBlock Text="Delay in ms — Delay action" Classes="fieldLabel"/>
+                                <NumericUpDown Value="{Binding DelayMs}" Minimum="0" Maximum="60000"
+                                               FormatString="0" Width="160" HorizontalAlignment="Left"/>
+
+                                <TextBlock Text="Map Local — serve this file as the response" Classes="fieldLabel"/>
+                                <TextBox Text="{Binding MapLocalPath}" Classes="mono"
+                                         Watermark="C:\path\to\mock-response.json"/>
+
+                                <Border Classes="panel" Margin="0,12,0,0">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="HTTP Modifier — regex find/replace" Classes="section"
+                                                   Margin="0,0,0,2"/>
+                                        <TextBlock Classes="fieldHint"
+                                                   Text="Applies to ModifyRequest / ModifyResponse rules. Capture groups ($1) and the escapes \r \n \t are supported; Content-Length is recalculated automatically."/>
+
+                                        <TextBlock Text="Match regexes — one per line, all must match the header block"
+                                                   Classes="fieldLabel"/>
+                                        <TextBox Text="{Binding MatchRegexText}" AcceptsReturn="True" Height="56"
+                                                 Classes="mono" Watermark="Host:.*example\.com"/>
+
+                                        <TextBlock Text="Header find =&gt; replace — one per line" Classes="fieldLabel"/>
+                                        <TextBox Text="{Binding HeaderFindReplaceText}" AcceptsReturn="True"
+                                                 Height="66" Classes="mono"
+                                                 Watermark="^Server:.*$ =&gt; Server: HttpSpy"/>
+
+                                        <TextBlock Text="Body find =&gt; replace — one per line" Classes="fieldLabel"/>
+                                        <TextBox Text="{Binding BodyFindReplaceText}" AcceptsReturn="True"
+                                                 Height="66" Classes="mono"
+                                                 Watermark="&quot;debug&quot;:false =&gt; &quot;debug&quot;:true"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Classes="panel" Margin="0,10,0,0">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Endpoint redirect — TCP/IP Redirector" Classes="section"
+                                                   Margin="0,0,0,2"/>
+                                        <TextBlock Classes="fieldHint"
+                                                   Text="Connects to a different host:port while the client-visible URL stays unchanged."/>
+                                        <StackPanel Orientation="Horizontal" Spacing="6">
+                                            <TextBox Text="{Binding RedirectHost}" Width="220" Classes="mono"
+                                                     Watermark="127.0.0.1"/>
+                                            <NumericUpDown Value="{Binding RedirectPort}" Minimum="0" Maximum="65535"
+                                                           FormatString="0" Width="118"/>
+                                        </StackPanel>
+                                        <CheckBox Content="Rewrite the Host header to the new endpoint"
+                                                  IsChecked="{Binding RewriteHostHeader}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Classes="panel" Margin="0,10,0,0">
+                                    <StackPanel Spacing="4">
+                                        <TextBlock Text="Highlight — column + operator" Classes="section"
+                                                   Margin="0,0,0,2"/>
+                                        <TextBlock Classes="fieldHint"
+                                                   Text="Matching rows are tinted with the colour below in the capture grid."/>
+                                        <WrapPanel Classes="spaced">
+                                            <ComboBox ItemsSource="{Binding HighlightColumns}"
+                                                      SelectedIndex="{Binding HighlightColumnIndex}" MinWidth="150"/>
+                                            <ComboBox ItemsSource="{Binding HighlightOperators}"
+                                                      SelectedIndex="{Binding HighlightOperatorIndex}" MinWidth="130"/>
+                                            <TextBox Text="{Binding HighlightValue}" Width="110" Watermark="value"/>
+                                            <TextBox Text="{Binding HighlightValue2}" Width="130"
+                                                     Watermark="upper (Between)"/>
+                                        </WrapPanel>
+                                        <TextBlock Text="Colour (#AARRGGBB)" Classes="fieldLabel"/>
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBox Text="{Binding HighlightColorHex}" Width="160" Classes="mono"/>
+                                            <Border Width="34" CornerRadius="4"
+                                                    BorderBrush="{DynamicResource SpyBorderBrush}" BorderThickness="1"
+                                                    Background="{Binding HighlightColor, Converter={StaticResource HighlightToBrush}}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <TextBlock Text="Bookmark comment — Bookmark action" Classes="fieldLabel"/>
+                                <TextBox Text="{Binding BookmarkComment}" Watermark="flagged by rule"/>
+
+                                <TextBlock Text="{Binding HitCount, StringFormat='Matched {0} transaction(s)'}"
+                                           Classes="muted" Margin="0,12,0,20"/>
                             </StackPanel>
-                            <TextBox Text="{Binding AutoReplyBody}" AcceptsReturn="True" Height="100"
-                                     FontFamily="Cascadia Mono,Consolas,monospace"/>
-                            <TextBlock Text="Delay (ms, Delay action)"/>
-                            <NumericUpDown Value="{Binding DelayMs}" Minimum="0" Maximum="60000" FormatString="0" Width="160" HorizontalAlignment="Left"/>
-                            <TextBlock Text="Map Local file (MapLocal action — serves this file as the response)"/>
-                            <TextBox Text="{Binding MapLocalPath}" Watermark="C:\path\to\mock-response.json"/>
+                        </ScrollViewer>
 
-                            <Border BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0" Margin="0,6,0,0"/>
-                            <TextBlock Text="HTTP Modifier (ModifyRequest / ModifyResponse) — regex find/replace"
-                                       FontWeight="Bold" Foreground="#FFB0C4DE"/>
-                            <TextBlock Text="Match regexes (optional, one per line — all must match the header block)"/>
-                            <TextBox Text="{Binding MatchRegexText}" AcceptsReturn="True" Height="50"
-                                     FontFamily="Cascadia Mono,Consolas,monospace"
-                                     Watermark="Host:.*example\.com"/>
-                            <TextBlock Text="Header find =&gt; replace (one per line; $1 groups and \r \n \t supported)"/>
-                            <TextBox Text="{Binding HeaderFindReplaceText}" AcceptsReturn="True" Height="60"
-                                     FontFamily="Cascadia Mono,Consolas,monospace"
-                                     Watermark="^Server:.*$ => Server: HttpSpy"/>
-                            <TextBlock Text="Body find =&gt; replace (one per line)"/>
-                            <TextBox Text="{Binding BodyFindReplaceText}" AcceptsReturn="True" Height="60"
-                                     FontFamily="Cascadia Mono,Consolas,monospace"
-                                     Watermark="&quot;debug&quot;:false => &quot;debug&quot;:true"/>
-
-                            <Border BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0" Margin="0,6,0,0"/>
-                            <TextBlock Text="Endpoint redirect (RedirectEndpoint — TCP/IP Redirector)"
-                                       FontWeight="Bold" Foreground="#FFB0C4DE"/>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBox Text="{Binding RedirectHost}" Width="200" Watermark="127.0.0.1"/>
-                                <NumericUpDown Value="{Binding RedirectPort}" Minimum="0" Maximum="65535" FormatString="0" Width="120"/>
-                            </StackPanel>
-                            <CheckBox Content="Rewrite Host header to the new endpoint" IsChecked="{Binding RewriteHostHeader}"/>
-
-                            <Border BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0" Margin="0,6,0,0"/>
-                            <TextBlock Text="Highlight rule (Highlight action — column + operator)"
-                                       FontWeight="Bold" Foreground="#FFB0C4DE"/>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <ComboBox ItemsSource="{Binding HighlightColumns}" SelectedIndex="{Binding HighlightColumnIndex}" MinWidth="140"/>
-                                <ComboBox ItemsSource="{Binding HighlightOperators}" SelectedIndex="{Binding HighlightOperatorIndex}" MinWidth="120"/>
-                                <TextBox Text="{Binding HighlightValue}" Width="100" Watermark="value"/>
-                                <TextBox Text="{Binding HighlightValue2}" Width="100" Watermark="upper (Between)"/>
-                            </StackPanel>
-                            <TextBlock Text="Highlight color (#AARRGGBB)"/>
-                            <TextBox Text="{Binding HighlightColorHex}" Width="160" HorizontalAlignment="Left"
-                                     FontFamily="Cascadia Mono,Consolas,monospace"/>
-
-                            <Border BorderBrush="#33FFFFFF" BorderThickness="0,1,0,0" Margin="0,6,0,0"/>
-                            <TextBlock Text="Bookmark comment (Bookmark action — auto-bookmark matches)"/>
-                            <TextBox Text="{Binding BookmarkComment}" Watermark="flagged by rule"/>
-
-                            <TextBlock Text="{Binding HitCount, StringFormat='Hits: {0}'}" Foreground="#FFB0C4DE"/>
+                        <StackPanel Classes="empty-state"
+                                    IsVisible="{Binding SelectedRule, Converter={x:Static ObjectConverters.IsNull}}">
+                            <TextBlock Text="⌘" Classes="glyph"/>
+                            <TextBlock Text="No rule selected" Classes="title"/>
+                            <TextBlock Text="Add a rule to block, redirect, mock, delay, rewrite, highlight or break on matching traffic — then press Apply to arm it."/>
                         </StackPanel>
-                    </ScrollViewer>
+                    </Panel>
                 </Grid>
             </TabItem>
 
             <!-- ========== LOG ========== -->
             <TabItem Header="Log">
-                <DockPanel Margin="6">
-                    <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="6" Margin="0,0,0,6">
-                        <Button Content="Clear" Command="{Binding ClearLogCommand}"/>
-                        <Button Content="Copy all" Command="{Binding CopyLogCommand}"/>
-                        <TextBlock VerticalAlignment="Center" Opacity="0.7"
-                                   Text="{Binding LogLines.Count, StringFormat='{}{0} event(s)'}"/>
-                    </StackPanel>
-                    <Border BorderBrush="#33808080" BorderThickness="1" CornerRadius="4">
-                        <ScrollViewer Name="LogScroll" Padding="6">
-                            <ItemsControl ItemsSource="{Binding LogLines}">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <TextBlock Text="{Binding}" TextWrapping="Wrap"
-                                                   Foreground="{Binding Converter={StaticResource LogLineToBrush}}"
-                                                   FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </ScrollViewer>
+                <DockPanel Margin="10">
+                    <Border DockPanel.Dock="Top" Classes="chrome" BorderThickness="0,0,0,1" Padding="0,0,0,8">
+                        <StackPanel Orientation="Horizontal" Spacing="7">
+                            <Button Content="Clear" Command="{Binding ClearLogCommand}"/>
+                            <Button Content="Copy all" Command="{Binding CopyLogCommand}"/>
+                            <TextBlock VerticalAlignment="Center" Classes="muted"
+                                       Text="{Binding LogLines.Count, StringFormat='{}{0} event(s)'}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border BorderBrush="{DynamicResource SpyBorderBrush}" BorderThickness="1"
+                            CornerRadius="6" Margin="0,8,0,0"
+                            Background="{DynamicResource SpySurfaceBrush}">
+                        <Panel>
+                            <ScrollViewer Name="LogScroll" Padding="10">
+                                <ItemsControl ItemsSource="{Binding LogLines}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <SelectableTextBlock Text="{Binding}" TextWrapping="Wrap"
+                                                                 Foreground="{Binding Converter={StaticResource LogLineToBrush}}"
+                                                                 Classes="mono"/>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <StackPanel Classes="empty-state" IsHitTestVisible="False"
+                                        IsVisible="{Binding LogLines.Count, Converter={StaticResource CountToBool}, ConverterParameter=invert}">
+                                <TextBlock Text="▤" Classes="glyph"/>
+                                <TextBlock Text="No diagnostics yet"/>
+                                <TextBlock Text="Listener state, TLS handshake failures, connection errors and breakpoint releases are logged here."/>
+                            </StackPanel>
+                        </Panel>
                     </Border>
                 </DockPanel>
             </TabItem>

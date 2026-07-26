@@ -135,6 +135,7 @@ internal sealed class ProxyServer : IDisposable
                 bool keepAlive = true;
                 while (keepAlive && !_ct.IsCancellationRequested)
                 {
+                    reader.Mark();
                     var req = await HttpWire.ReadRequestHeadAsync(reader, _ct).ConfigureAwait(false);
                     if (req is null) break;
                     string host = req.Headers["Host"] ?? "unknown";
@@ -194,6 +195,7 @@ internal sealed class ProxyServer : IDisposable
             bool keepAlive = true;
             while (keepAlive && !_ct.IsCancellationRequested)
             {
+                reader.Mark();
                 var head = await HttpWire.ReadRequestHeadAsync(reader, _ct).ConfigureAwait(false);
                 if (head is null) break;
 
@@ -227,8 +229,13 @@ internal sealed class ProxyServer : IDisposable
         var ack = Encoding.ASCII.GetBytes("HTTP/1.1 200 Connection Established\r\n\r\n");
         await clientStream.WriteAsync(ack, _ct).ConfigureAwait(false);
 
+        // Guard against blank entries in the passthrough list: string.EndsWith("")
+        // is always true, so one empty line in the Options textbox would silently
+        // disable decryption for every host.
         bool passthrough = !Options.DecryptHttps ||
-                           Options.TlsPassthroughHosts.Any(h => host.EndsWith(h, StringComparison.OrdinalIgnoreCase));
+                           Options.TlsPassthroughHosts.Any(h =>
+                               !string.IsNullOrWhiteSpace(h) &&
+                               host.EndsWith(h.Trim(), StringComparison.OrdinalIgnoreCase));
 
         if (passthrough)
         {
@@ -249,44 +256,60 @@ internal sealed class ProxyServer : IDisposable
         (int pid, string name) origin)
     {
         SslStream sslClient;
+        X509Certificate2 leaf;
         try
         {
-            var leaf = _engine.CertificateAuthority.GetCertificateForHost(host);
+            leaf = _engine.CertificateAuthority.GetCertificateForHost(host);
             sslClient = new SslStream(clientStream, leaveInnerStreamOpen: false);
-            var serverOptions = new SslServerAuthenticationOptions
-            {
-                ServerCertificate = leaf,
-                ClientCertificateRequired = false,
-            };
-            // Offer HTTP/2 via ALPN so h2 clients negotiate it; fall back to HTTP/1.1.
-            if (Options.EnableHttp2)
-                serverOptions.ApplicationProtocols = new List<SslApplicationProtocol>
-                {
-                    SslApplicationProtocol.Http2, SslApplicationProtocol.Http11
-                };
-            await sslClient.AuthenticateAsServerAsync(serverOptions, _ct).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            _engine.RaiseLog($"TLS handshake with client failed for {host}: {ex.Message}");
+            _engine.RaiseLog($"Could not issue a leaf certificate for {host}: {ex.Message}");
             return;
         }
 
-        if (sslClient.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2)
+        // From here on the SslStream owns the client stream, so it must always be
+        // disposed — the previous code leaked one per intercepted connection.
+        await using (sslClient.ConfigureAwait(false))
         {
-            var h2 = new Http2.Http2Connection(_engine, _upstream, sslClient, host, port, origin, _ct);
-            await h2.RunAsync().ConfigureAwait(false);
-            return;
-        }
+            try
+            {
+                var serverOptions = new SslServerAuthenticationOptions
+                {
+                    ServerCertificate = leaf,
+                    ClientCertificateRequired = false,
+                };
+                // Offer HTTP/2 via ALPN so h2 clients negotiate it; fall back to HTTP/1.1.
+                if (Options.EnableHttp2)
+                    serverOptions.ApplicationProtocols = new List<SslApplicationProtocol>
+                    {
+                        SslApplicationProtocol.Http2, SslApplicationProtocol.Http11
+                    };
+                await sslClient.AuthenticateAsServerAsync(serverOptions, _ct).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _engine.RaiseLog($"TLS handshake with client failed for {host}: {ex.Message}");
+                return;
+            }
 
-        var sslReader = new StreamReaderEx(sslClient);
-        bool keepAlive = true;
-        while (keepAlive && !_ct.IsCancellationRequested)
-        {
-            var req = await HttpWire.ReadRequestHeadAsync(sslReader, _ct).ConfigureAwait(false);
-            if (req is null) break;
-            keepAlive = await ProcessRequestAsync(req, sslReader, sslClient, "https", host, port, origin)
-                .ConfigureAwait(false);
+            if (sslClient.NegotiatedApplicationProtocol == SslApplicationProtocol.Http2)
+            {
+                var h2 = new Http2.Http2Connection(_engine, _upstream, sslClient, host, port, origin, _ct);
+                await h2.RunAsync().ConfigureAwait(false);
+                return;
+            }
+
+            var sslReader = new StreamReaderEx(sslClient);
+            bool keepAlive = true;
+            while (keepAlive && !_ct.IsCancellationRequested)
+            {
+                sslReader.Mark();
+                var req = await HttpWire.ReadRequestHeadAsync(sslReader, _ct).ConfigureAwait(false);
+                if (req is null) break;
+                keepAlive = await ProcessRequestAsync(req, sslReader, sslClient, "https", host, port, origin)
+                    .ConfigureAwait(false);
+            }
         }
     }
 
@@ -322,11 +345,22 @@ internal sealed class ProxyServer : IDisposable
         }
     }
 
-    private static async Task RelayBytesAsync(Stream a, Stream b)
+    /// <summary>
+    /// Pumps bytes in both directions until either side closes. Faults on the
+    /// copy tasks are expected (the peer just went away) and are swallowed so a
+    /// half-closed tunnel does not surface as an unobserved task exception.
+    /// </summary>
+    private async Task RelayBytesAsync(Stream a, Stream b)
     {
-        var t1 = a.CopyToAsync(b);
-        var t2 = b.CopyToAsync(a);
+        var t1 = CopySafeAsync(a, b);
+        var t2 = CopySafeAsync(b, a);
         await Task.WhenAny(t1, t2).ConfigureAwait(false);
+    }
+
+    private async Task CopySafeAsync(Stream from, Stream to)
+    {
+        try { await from.CopyToAsync(to, 32 * 1024, _ct).ConfigureAwait(false); }
+        catch { /* peer closed or capture stopped */ }
     }
 
     // ---- Plain HTTP proxy request -------------------------------------------
@@ -365,9 +399,16 @@ internal sealed class ProxyServer : IDisposable
         var session = BuildSession(head, scheme, host, port, origin);
 
         bool requestBodyForbidden = string.Equals(head.Method, "TRACE", StringComparison.OrdinalIgnoreCase);
-        session.RequestBody = await HttpWire.ReadBodyAsync(reader, head.Headers, requestBodyForbidden, _ct)
+        var requestBody = await HttpWire
+            .ReadBodyAsync(reader, head.Headers, requestBodyForbidden, _ct, Options.MaxBufferedBody)
             .ConfigureAwait(false);
-        session.BytesSent = reader.TotalBytesRead;
+        session.RequestBody = requestBody.Data;
+        session.RequestBodyTruncated = requestBody.Truncated;
+
+        // Measured from the mark the read loop set before the request line, so
+        // this counts the head plus the body of *this* request — not the running
+        // total of every request that shared the keep-alive connection.
+        session.BytesSent = reader.BytesSinceMark;
 
         bool clientWantsKeepAlive = WantsKeepAlive(head.Version, head.Headers["Connection"]);
         bool isWebSocket = IsWebSocketUpgrade(head.Headers);
@@ -378,9 +419,11 @@ internal sealed class ProxyServer : IDisposable
         var decision = _engine.Rules.EvaluateRequest(session);
         if (decision.Block)
         {
+            // WriteSimpleResponseAsync sends "Connection: close", so the client
+            // must not be told to keep the connection alive.
             await WriteSimpleResponseAsync(clientStream, session, 403, "Blocked by HttpSpy",
                 "Request blocked by an HttpSpy rule.").ConfigureAwait(false);
-            return clientWantsKeepAlive;
+            return false;
         }
         if (decision.AutoReply is { } reply)
         {
@@ -447,7 +490,16 @@ internal sealed class ProxyServer : IDisposable
             session.Timings.ConnectMs = sw.Elapsed.TotalMilliseconds - connectStart;
 
             var upstreamHeaders = BuildUpstreamHeaders(session, head, isWebSocket);
-            var requestBytes = HttpWire.SerializeRequest(head.Method, head.Target, head.Version,
+
+            // A chained forward proxy expects an absolute-form target
+            // ("GET http://host/path HTTP/1.1"); only the origin server takes the
+            // origin-form path. Getting this wrong made upstream-proxy chaining
+            // fail for every plain-HTTP request.
+            string requestTarget = _upstream.RequiresAbsoluteForm(scheme == "https")
+                ? BuildAbsoluteTarget(scheme, host, port, head.Target)
+                : head.Target;
+
+            var requestBytes = HttpWire.SerializeRequest(head.Method, requestTarget, head.Version,
                 upstreamHeaders, session.RequestBody);
             session.State = SessionState.SentToServer;
             var sendStart = sw.Elapsed.TotalMilliseconds;
@@ -512,16 +564,21 @@ internal sealed class ProxyServer : IDisposable
 
             // ---- Ordinary response ------------------------------------------
             var recvStart = sw.Elapsed.TotalMilliseconds;
-            var rawBody = await HttpWire.ReadResponseBodyAsync(upReader, respHead.Headers, bodyForbidden, _ct)
+            var responseBody = await HttpWire
+                .ReadResponseBodyAsync(upReader, respHead.Headers, bodyForbidden, _ct, Options.MaxBufferedBody)
                 .ConfigureAwait(false);
+            var rawBody = responseBody.Data;
+            session.ResponseBodyTruncated = responseBody.Truncated;
             session.Timings.ReceiveMs = sw.Elapsed.TotalMilliseconds - recvStart;
             session.BytesReceived = upReader.TotalBytesRead;
 
             // We de-chunk while reading and decode Content-Encoding so the body is
             // human-readable; the wire headers are adjusted to match (single
             // collection — session.ResponseHeaders — to avoid header drift).
+            // A truncated body is a prefix of the compressed stream, so decoding it
+            // would fail or yield garbage; keep it as-is and say so instead.
             var encoding = respHead.Headers["Content-Encoding"];
-            var decoded = HttpWire.Decompress(rawBody, encoding);
+            var decoded = session.ResponseBodyTruncated ? rawBody : HttpWire.Decompress(rawBody, encoding);
             bool wasDecoded = !ReferenceEquals(decoded, rawBody);
             session.ResponseBody = decoded;
             session.EncodedBodySize = rawBody.LongLength;
@@ -539,7 +596,11 @@ internal sealed class ProxyServer : IDisposable
                 if (paused.Aborted) return false;
             }
 
-            session.ResponseHeaders.Set("Content-Length", session.ResponseBody.Length.ToString());
+            // A 204/304 or a response to HEAD must not carry a body, and per
+            // RFC 9110 §8.6 a 304 keeps the origin's Content-Length untouched —
+            // stamping "Content-Length: 0" on it corrupts the client's cache.
+            if (!bodyForbidden)
+                session.ResponseHeaders.Set("Content-Length", session.ResponseBody.Length.ToString());
             session.ResponseHeaders.Set("Connection", clientWantsKeepAlive ? "keep-alive" : "close");
 
             var responseBytes = HttpWire.SerializeResponse(respHead.Version, session.StatusCode,
@@ -599,7 +660,14 @@ internal sealed class ProxyServer : IDisposable
     private void RecordSse(HttpSession session, IEnumerable<ServerSentEvent> events)
     {
         bool any = false;
-        foreach (var e in events) { session.ServerSentEvents.Add(e); any = true; }
+        int cap = Options.MaxServerSentEvents;
+        foreach (var e in events)
+        {
+            // A long-lived event stream is unbounded by nature; keep a rolling
+            // window so an overnight capture cannot exhaust memory.
+            session.AddServerSentEvent(e, cap);
+            any = true;
+        }
         if (any) _engine.RaiseUpdated(session);
     }
 
@@ -723,13 +791,49 @@ internal sealed class ProxyServer : IDisposable
         }
     }
 
-    private static (string host, int port) SplitHostPort(string value, int defaultPort)
+    /// <summary>
+    /// Splits an authority into host and port. IPv6 literals are handled: a
+    /// bracketed form keeps its brackets ("[::1]:443" → "[::1]", 443) and a bare
+    /// literal is never mistaken for a host:port pair ("::1" → "::1", default).
+    /// </summary>
+    internal static (string host, int port) SplitHostPort(string value, int defaultPort)
     {
         if (string.IsNullOrEmpty(value)) return ("", defaultPort);
+        value = value.Trim();
+
+        if (value[0] == '[')
+        {
+            int close = value.IndexOf(']');
+            if (close < 0) return (value, defaultPort);
+            string literal = value[..(close + 1)];
+            if (close + 1 < value.Length && value[close + 1] == ':' &&
+                int.TryParse(value[(close + 2)..], out int bracketed))
+                return (literal, bracketed);
+            return (literal, defaultPort);
+        }
+
         int idx = value.LastIndexOf(':');
-        if (idx > 0 && int.TryParse(value[(idx + 1)..], out int p))
+        // More than one colon and no brackets means a bare IPv6 literal, not a port.
+        if (idx > 0 && value.IndexOf(':') == idx && int.TryParse(value[(idx + 1)..], out int p) &&
+            p is > 0 and <= 65535)
             return (value[..idx], p);
         return (value, defaultPort);
+    }
+
+    /// <summary>
+    /// Builds the absolute-form request target a chained forward proxy expects,
+    /// omitting the port when it is the scheme default.
+    /// </summary>
+    internal static string BuildAbsoluteTarget(string scheme, string host, int port, string originForm)
+    {
+        if (originForm.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+            originForm.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return originForm;
+
+        bool defaultPort = (scheme == "https" && port == 443) || (scheme == "http" && port == 80) || port <= 0;
+        string authority = defaultPort ? host : $"{host}:{port}";
+        if (!originForm.StartsWith('/')) originForm = "/" + originForm;
+        return $"{scheme}://{authority}{originForm}";
     }
 
     private static bool WantsKeepAlive(string version, string? connectionHeader)

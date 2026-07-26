@@ -11,7 +11,13 @@ public sealed class WebSocketFrame
     public bool Masked { get; set; }
     public byte[] Payload { get; set; } = Array.Empty<byte>();
 
-    public long Length => Payload.LongLength;
+    /// <summary>The payload length declared on the wire, which may exceed what was retained.</summary>
+    public long DeclaredLength { get; set; }
+
+    /// <summary>True when <see cref="Payload"/> is only a prefix of the real payload.</summary>
+    public bool Truncated { get; set; }
+
+    public long Length => DeclaredLength > 0 ? DeclaredLength : Payload.LongLength;
 
     public bool IsText => Opcode == WebSocketOpcode.Text;
 
@@ -29,8 +35,9 @@ public sealed class WebSocketFrame
                 WebSocketOpcode.Close => "[close]",
                 WebSocketOpcode.Ping => "[ping]",
                 WebSocketOpcode.Pong => "[pong]",
-                _ => $"[{Opcode} {Payload.Length}b]"
+                _ => $"[{Opcode} {Length}b]"
             };
+            if (Truncated) body += $"  … (truncated, {Length:N0} bytes on the wire)";
             return $"{arrow}  {body}";
         }
     }

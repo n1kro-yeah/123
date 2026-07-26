@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using HttpSpy.Core.Models;
 
@@ -93,10 +94,40 @@ public sealed class Rule
     /// <summary>For Bookmark: an optional comment attached to matching items.</summary>
     public string? BookmarkComment { get; set; }
 
-    public long HitCount { get; set; }
+    /// <summary>How many transactions this rule has fired on. Updated concurrently.</summary>
+    [JsonIgnore]
+    public long HitCount
+    {
+        get => Interlocked.Read(ref _hitCount);
+        set => Interlocked.Exchange(ref _hitCount, value);
+    }
 
-    private Regex? _compiled;
-    private string? _compiledFor;
+    private long _hitCount;
+
+    /// <summary>Atomically records one more hit and returns the new total.</summary>
+    public long RecordHit() => Interlocked.Increment(ref _hitCount);
+
+    /// <summary>
+    /// The last regex compilation error for this rule's URL pattern, or null when
+    /// the pattern is valid. Surfaced in the rule editor so a typo is visible
+    /// instead of silently matching nothing.
+    /// </summary>
+    [JsonIgnore]
+    public string? PatternError { get; private set; }
+
+    /// <summary>
+    /// Ceiling on how long a single user-supplied pattern may run. Without it a
+    /// catastrophically backtracking pattern would stall a proxy worker — and
+    /// with it, the client connection it is serving.
+    /// </summary>
+    internal static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
+    // Written as one unit under the lock and published as a single reference, so a
+    // concurrent reader can never observe a regex paired with the wrong pattern.
+    private sealed record CompiledPattern(string Source, Regex? Regex, string? Error);
+
+    private volatile CompiledPattern? _compiled;
+    private readonly object _compileGate = new();
 
     public bool Matches(string method, string url, int status)
     {
@@ -119,21 +150,67 @@ public sealed class Rule
             case MatchMode.Exact:
                 return string.Equals(url, UrlPattern, StringComparison.OrdinalIgnoreCase);
             case MatchMode.Regex:
-                return GetRegex(UrlPattern).IsMatch(url);
+                return IsRegexMatch(UrlPattern, url);
             case MatchMode.Wildcard:
             default:
-                return GetRegex(WildcardToRegex(UrlPattern)).IsMatch(url);
+                return IsRegexMatch(WildcardToRegex(UrlPattern), url);
         }
     }
 
-    private Regex GetRegex(string pattern)
+    /// <summary>
+    /// Matches with a compiled, cached regex. An invalid pattern or a match that
+    /// blows the timeout is recorded on <see cref="PatternError"/> and treated as
+    /// "no match" — a bad rule must never take the proxy down with it.
+    /// </summary>
+    private bool IsRegexMatch(string pattern, string input)
     {
-        if (_compiled is null || _compiledFor != pattern)
+        var compiled = GetCompiled(pattern);
+        if (compiled.Regex is null) return false;
+        try
         {
-            _compiled = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
-            _compiledFor = pattern;
+            return compiled.Regex.IsMatch(input);
         }
-        return _compiled;
+        catch (RegexMatchTimeoutException)
+        {
+            PatternError = $"Pattern timed out after {RegexTimeout.TotalMilliseconds:F0} ms; rule skipped.";
+            return false;
+        }
+    }
+
+    private CompiledPattern GetCompiled(string pattern)
+    {
+        var current = _compiled;
+        if (current is not null && current.Source == pattern) return current;
+
+        lock (_compileGate)
+        {
+            current = _compiled;
+            if (current is not null && current.Source == pattern) return current;
+
+            CompiledPattern built;
+            try
+            {
+                built = new CompiledPattern(pattern,
+                    new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled, RegexTimeout), null);
+            }
+            catch (ArgumentException ex)
+            {
+                built = new CompiledPattern(pattern, null, ex.Message);
+            }
+
+            PatternError = built.Error;
+            _compiled = built;
+            return built;
+        }
+    }
+
+    /// <summary>Validates the current URL pattern, returning the error message if any.</summary>
+    public string? ValidatePattern()
+    {
+        if (string.IsNullOrEmpty(UrlPattern) || UrlPattern == "*") { PatternError = null; return null; }
+        if (UrlMatchMode is MatchMode.Contains or MatchMode.Exact) { PatternError = null; return null; }
+        var pattern = UrlMatchMode == MatchMode.Regex ? UrlPattern : WildcardToRegex(UrlPattern);
+        return GetCompiled(pattern).Error;
     }
 
     public static string WildcardToRegex(string wildcard)
@@ -150,6 +227,7 @@ public sealed class Rule
         clone.ModifierRules = ModifierRules.Select(m => m.Clone()).ToList();
         clone.HeaderMatchRegexes = new List<string>(HeaderMatchRegexes);
         clone._compiled = null;
+        clone._hitCount = 0;
         return clone;
     }
 
@@ -165,10 +243,12 @@ public sealed class Rule
             if (string.IsNullOrWhiteSpace(pattern)) continue;
             try
             {
-                if (!Regex.IsMatch(rawHeaderBlock, pattern, RegexOptions.IgnoreCase | RegexOptions.Multiline))
+                if (!Regex.IsMatch(rawHeaderBlock, pattern,
+                        RegexOptions.IgnoreCase | RegexOptions.Multiline, RegexTimeout))
                     return false;
             }
             catch (ArgumentException) { return false; }
+            catch (RegexMatchTimeoutException) { return false; }
         }
         return true;
     }

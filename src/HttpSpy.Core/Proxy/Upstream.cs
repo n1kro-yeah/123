@@ -29,62 +29,111 @@ public sealed class Upstream
         }
     }
 
+    /// <summary>
+    /// True when requests on this connection must use absolute-form request
+    /// targets (<c>GET http://host/path</c>) because they are being handed to a
+    /// chained forward proxy rather than to the origin server itself.
+    /// </summary>
+    public bool RequiresAbsoluteForm(bool tls) => !tls && !string.IsNullOrEmpty(_options.UpstreamProxyHost);
+
     public async Task<Connection> ConnectAsync(string host, int port, bool tls, CancellationToken ct,
         IReadOnlyList<SslApplicationProtocol>? alpnProtocols = null)
     {
         var tcp = new TcpClient { NoDelay = true };
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(_options.ConnectTimeoutMs);
-
-        bool useChain = !string.IsNullOrEmpty(_options.UpstreamProxyHost);
-        if (useChain)
+        SslStream? ssl = null;
+        try
         {
-            await tcp.ConnectAsync(_options.UpstreamProxyHost!, _options.UpstreamProxyPort, timeoutCts.Token)
-                .ConfigureAwait(false);
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(_options.ConnectTimeoutMs);
+
+            bool useChain = !string.IsNullOrEmpty(_options.UpstreamProxyHost);
+            if (useChain)
+            {
+                await tcp.ConnectAsync(_options.UpstreamProxyHost!, _options.UpstreamProxyPort, timeoutCts.Token)
+                    .ConfigureAwait(false);
+                // Only TLS needs a tunnel; plain HTTP is forwarded to the chained
+                // proxy using an absolute-form request target instead.
+                if (tls)
+                    await SendConnectAsync(tcp.GetStream(), host, port, timeoutCts.Token).ConfigureAwait(false);
+            }
+            else
+            {
+                await tcp.ConnectAsync(host, port, timeoutCts.Token).ConfigureAwait(false);
+            }
+
+            Stream stream = tcp.GetStream();
+            X509Certificate2? serverCert = null;
+
+            string negotiated = string.Empty;
             if (tls)
-                await SendConnectAsync(tcp.GetStream(), host, port, timeoutCts.Token).ConfigureAwait(false);
-        }
-        else
-        {
-            await tcp.ConnectAsync(host, port, timeoutCts.Token).ConfigureAwait(false);
-        }
-
-        Stream stream = tcp.GetStream();
-        X509Certificate2? serverCert = null;
-
-        string negotiated = string.Empty;
-        if (tls)
-        {
-            var ssl = new SslStream(stream, false, (_, cert, _, _) =>
             {
-                if (cert is not null) serverCert = new X509Certificate2(cert);
-                return true; // a debugging proxy accepts upstream certs to remain useful behind interception
-            });
-            var options = new SslClientAuthenticationOptions
+                ssl = new SslStream(stream, leaveInnerStreamOpen: false, (_, cert, _, _) =>
+                {
+                    if (cert is not null) serverCert = new X509Certificate2(cert);
+                    return true; // a debugging proxy accepts upstream certs to remain useful behind interception
+                });
+                var options = new SslClientAuthenticationOptions
+                {
+                    TargetHost = host,
+                    EnabledSslProtocols = SslProtocols.None,
+                };
+                if (alpnProtocols is not null)
+                    options.ApplicationProtocols = alpnProtocols.ToList();
+                await ssl.AuthenticateAsClientAsync(options, timeoutCts.Token).ConfigureAwait(false);
+                negotiated = ssl.NegotiatedApplicationProtocol.ToString();
+                stream = ssl;
+            }
+
+            return new Connection
             {
-                TargetHost = host,
-                EnabledSslProtocols = SslProtocols.None,
+                Tcp = tcp,
+                Stream = stream,
+                ServerCertificate = serverCert,
+                NegotiatedProtocol = negotiated,
             };
-            if (alpnProtocols is not null)
-                options.ApplicationProtocols = alpnProtocols.ToList();
-            await ssl.AuthenticateAsClientAsync(options, timeoutCts.Token).ConfigureAwait(false);
-            negotiated = ssl.NegotiatedApplicationProtocol.ToString();
-            stream = ssl;
         }
-
-        return new Connection { Tcp = tcp, Stream = stream, ServerCertificate = serverCert, NegotiatedProtocol = negotiated };
+        catch
+        {
+            // Connect / handshake failed: nothing owns the socket yet, so release
+            // it here rather than leaking it until finalization.
+            try { ssl?.Dispose(); } catch { /* ignore */ }
+            try { tcp.Dispose(); } catch { /* ignore */ }
+            throw;
+        }
     }
 
     private static async Task SendConnectAsync(Stream stream, string host, int port, CancellationToken ct)
     {
-        var req = $"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\n\r\n";
+        var req = $"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\nProxy-Connection: keep-alive\r\n\r\n";
         var bytes = Encoding.ASCII.GetBytes(req);
         await stream.WriteAsync(bytes, ct).ConfigureAwait(false);
 
-        var reader = new StreamReaderEx(stream);
-        // Read status line + headers until blank line.
-        string? line = await reader.ReadLineAsync(ct).ConfigureAwait(false);
-        if (line is null || !line.Contains("200")) throw new IOException($"Upstream proxy CONNECT failed: {line}");
-        while (!string.IsNullOrEmpty(await reader.ReadLineAsync(ct).ConfigureAwait(false))) { }
+        // Read the CONNECT response one byte at a time: a buffered reader could
+        // swallow bytes belonging to the tunnelled TLS handshake that follows.
+        string statusLine = await ReadLineUnbufferedAsync(stream, ct).ConfigureAwait(false);
+        var parts = statusLine.Split(' ', 3);
+        if (parts.Length < 2 || !int.TryParse(parts[1], out int status) || status is < 200 or > 299)
+            throw new IOException($"Upstream proxy CONNECT failed: {statusLine}");
+
+        while (true)
+        {
+            var line = await ReadLineUnbufferedAsync(stream, ct).ConfigureAwait(false);
+            if (line.Length == 0) break;
+        }
+    }
+
+    /// <summary>Reads a CRLF-terminated line without reading ahead past it.</summary>
+    private static async Task<string> ReadLineUnbufferedAsync(Stream stream, CancellationToken ct)
+    {
+        var sb = new StringBuilder(128);
+        var one = new byte[1];
+        while (sb.Length <= StreamReaderEx.MaxLineLength)
+        {
+            int n = await stream.ReadAsync(one.AsMemory(0, 1), ct).ConfigureAwait(false);
+            if (n <= 0) break;
+            if (one[0] == (byte)'\n') break;
+            if (one[0] != (byte)'\r') sb.Append((char)one[0]);
+        }
+        return sb.ToString();
     }
 }

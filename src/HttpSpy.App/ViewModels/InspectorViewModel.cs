@@ -38,7 +38,7 @@ public sealed class InspectorViewModel : ViewModelBase
 
     /// <summary>Syntax language used to colourise the request body viewer.</summary>
     public Controls.SyntaxLanguage RequestBodyLanguage => LanguageFor(_session?.RequestBodyKind);
-    public string RequestRaw => _session is null ? "" : BuildRaw(true);
+    public string RequestRaw => _requestRaw ??= _session is null ? "" : BuildRaw(true);
     public bool HasRequestBody => _session is { RequestBody.Length: > 0 };
 
     // ---- Response ------------------------------------------------------------
@@ -74,10 +74,32 @@ public sealed class InspectorViewModel : ViewModelBase
     };
 
     public string ResponseBodyRaw => _session?.ResponseBodyText ?? "";
-    public string ResponseHex => _session is null ? "" : BodyFormatter.HexDump(_session.ResponseBody);
-    public string RequestHex => _session is null ? "" : BodyFormatter.HexDump(_session.RequestBody);
-    public string ResponseRaw => _session is null ? "" : BuildRaw(false);
+
+    // Hex dumps and raw views are ~4x and ~1x the body size respectively. Building
+    // them eagerly for every selection froze the UI on large payloads, so they are
+    // computed on first access and cached until the selection changes.
+    private string? _responseHex;
+    private string? _requestHex;
+    private string? _responseRaw;
+    private string? _requestRaw;
+
+    public string ResponseHex =>
+        _responseHex ??= _session is null ? "" : BodyFormatter.HexDump(_session.ResponseBody);
+
+    public string RequestHex =>
+        _requestHex ??= _session is null ? "" : BodyFormatter.HexDump(_session.RequestBody);
+
+    public string ResponseRaw => _responseRaw ??= _session is null ? "" : BuildRaw(false);
     public bool HasResponseBody => _session is { ResponseBody.Length: > 0 };
+
+    /// <summary>Warns when the captured body is only a prefix of what crossed the wire.</summary>
+    public bool IsResponseTruncated => _session?.ResponseBodyTruncated == true;
+    public bool IsRequestTruncated => _session?.RequestBodyTruncated == true;
+
+    public string TruncationNotice => _session is null
+        ? ""
+        : "This body exceeded the buffered-body limit and was captured only in part. " +
+          "Raise it under Tools ▸ Options if you need the whole payload.";
 
     // ---- Image preview -------------------------------------------------------
     private Bitmap? _imagePreview;
@@ -226,7 +248,9 @@ public sealed class InspectorViewModel : ViewModelBase
     public bool IsSse => _session?.Kind == SessionKind.ServerSentEvents;
 
     // ---- Code generation -----------------------------------------------------
-    public string[] CodeLanguages { get; } = { "curl", "C#", "Python", "JavaScript" };
+    // Sourced from the generator itself so the picker cannot drift out of sync
+    // with the Language enum it indexes into.
+    public string[] CodeLanguages { get; } = CodeGenerator.LanguageNames;
 
     private int _selectedCodeLanguageIndex;
     public int SelectedCodeLanguageIndex
@@ -260,7 +284,12 @@ public sealed class InspectorViewModel : ViewModelBase
         FormFields.Clear();
         ResponseHeaders.Clear();
         ResponseCookies.Clear();
+        WebSocketFrames.Clear();
+        ServerSentEvents.Clear();
         ImagePreview = null;
+
+        // Invalidate the lazily-built heavy views for the previous selection.
+        _responseHex = _requestHex = _responseRaw = _requestRaw = null;
 
         if (_session is not null)
         {
@@ -292,15 +321,37 @@ public sealed class InspectorViewModel : ViewModelBase
         foreach (var name in DynamicProperties) OnPropertyChanged(name);
     }
 
+    /// <summary>
+    /// Mirrors the session's streaming collections into the observable ones the
+    /// grids bind to. The model returns immutable snapshots (frames are appended
+    /// from proxy worker threads), and the retention cap can drop old entries — so
+    /// when the source has shrunk or diverged, rebuild rather than append.
+    /// </summary>
     private void SyncStreaming()
     {
         if (_session is null) return;
-        while (WebSocketFrames.Count < _session.WebSocketFrames.Count)
-            WebSocketFrames.Add(_session.WebSocketFrames[WebSocketFrames.Count]);
-        while (ServerSentEvents.Count < _session.ServerSentEvents.Count)
-            ServerSentEvents.Add(_session.ServerSentEvents[ServerSentEvents.Count]);
-        if (WebSocketFrames.Count > _session.WebSocketFrames.Count) WebSocketFrames.Clear();
-        if (ServerSentEvents.Count > _session.ServerSentEvents.Count) ServerSentEvents.Clear();
+
+        var frames = _session.WebSocketFrames;
+        if (frames.Count < WebSocketFrames.Count)
+        {
+            WebSocketFrames.Clear();
+            foreach (var f in frames) WebSocketFrames.Add(f);
+        }
+        else
+        {
+            for (int i = WebSocketFrames.Count; i < frames.Count; i++) WebSocketFrames.Add(frames[i]);
+        }
+
+        var events = _session.ServerSentEvents;
+        if (events.Count < ServerSentEvents.Count)
+        {
+            ServerSentEvents.Clear();
+            foreach (var e in events) ServerSentEvents.Add(e);
+        }
+        else
+        {
+            for (int i = ServerSentEvents.Count; i < events.Count; i++) ServerSentEvents.Add(events[i]);
+        }
     }
 
     private void TryLoadImage()
@@ -347,5 +398,6 @@ public sealed class InspectorViewModel : ViewModelBase
         nameof(IsJsonResponse), nameof(SummaryText),
         nameof(IsGrpc), nameof(GrpcRequestText), nameof(GrpcResponseText),
         nameof(RequestBodyLanguage), nameof(ResponseBodyLanguage),
+        nameof(IsRequestTruncated), nameof(IsResponseTruncated), nameof(TruncationNotice),
     };
 }

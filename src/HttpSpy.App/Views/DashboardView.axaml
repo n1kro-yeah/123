@@ -7,7 +7,8 @@
              x:Class="HttpSpy.App.Views.DashboardView"
              x:DataType="vm:DashboardViewModel">
 
-    <ScrollViewer>
+  <Panel>
+    <ScrollViewer IsVisible="{Binding Total, Converter={StaticResource CountToBool}}">
         <StackPanel Margin="16" Spacing="18">
             <!-- KPI cards -->
             <WrapPanel>
@@ -22,11 +23,11 @@
             <ItemsControl ItemsSource="{Binding StatusDistribution}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Grid ColumnDefinitions="160,*,60" Margin="0,2">
+                        <Grid ColumnDefinitions="170,Auto,*" Margin="0,2">
                             <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"/>
                             <Rectangle Grid.Column="1" Height="18" HorizontalAlignment="Left"
                                        Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
-                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -36,11 +37,11 @@
             <ItemsControl ItemsSource="{Binding TopHosts}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Grid ColumnDefinitions="220,*,60" Margin="0,2">
+                        <Grid ColumnDefinitions="230,Auto,*" Margin="0,2">
                             <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                             <Rectangle Grid.Column="1" Height="18" HorizontalAlignment="Left"
                                        Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
-                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -50,11 +51,11 @@
             <ItemsControl ItemsSource="{Binding ContentTypes}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Grid ColumnDefinitions="220,*,60" Margin="0,2">
+                        <Grid ColumnDefinitions="230,Auto,*" Margin="0,2">
                             <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                             <Rectangle Grid.Column="1" Height="18" HorizontalAlignment="Left"
                                        Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
-                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -64,11 +65,11 @@
             <ItemsControl ItemsSource="{Binding Methods}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Grid ColumnDefinitions="160,*,60" Margin="0,2">
+                        <Grid ColumnDefinitions="170,Auto,*" Margin="0,2">
                             <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center"/>
                             <Rectangle Grid.Column="1" Height="18" HorizontalAlignment="Left"
                                        Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
-                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -78,11 +79,11 @@
             <ItemsControl ItemsSource="{Binding TopProcesses}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Grid ColumnDefinitions="220,*,60" Margin="0,2">
+                        <Grid ColumnDefinitions="230,Auto,*" Margin="0,2">
                             <TextBlock Grid.Column="0" Text="{Binding Label}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                             <Rectangle Grid.Column="1" Height="18" HorizontalAlignment="Left"
                                        Width="{Binding BarWidth}" Fill="{Binding Brush}" RadiusX="3" RadiusY="3"/>
-                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                            <TextBlock Grid.Column="2" Text="{Binding Value}" VerticalAlignment="Center" Margin="10,0,0,0" FontWeight="SemiBold"/>
                         </Grid>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -102,7 +103,7 @@
                             <Rectangle Width="34" Height="{Binding BarWidth}" HorizontalAlignment="Center"
                                        Fill="{Binding Brush}" RadiusX="2" RadiusY="2"/>
                             <TextBlock Text="{Binding Label}" HorizontalAlignment="Center" FontSize="10"
-                                       Foreground="#FFB0C4DE"/>
+                                       Foreground="{DynamicResource SpyTextMutedBrush}"/>
                         </StackPanel>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
@@ -110,26 +111,11 @@
         </StackPanel>
     </ScrollViewer>
 
-    <UserControl.Styles>
-        <Style Selector="Border.card">
-            <Setter Property="Background" Value="#22FFFFFF"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="16,10"/>
-            <Setter Property="Margin" Value="0,0,12,12"/>
-            <Setter Property="MinWidth" Value="150"/>
-        </Style>
-        <Style Selector="TextBlock.kpiLabel">
-            <Setter Property="Foreground" Value="#FFB0C4DE"/>
-            <Setter Property="FontSize" Value="13"/>
-        </Style>
-        <Style Selector="TextBlock.kpiValue">
-            <Setter Property="FontSize" Value="26"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-        </Style>
-        <Style Selector="TextBlock.section">
-            <Setter Property="FontSize" Value="16"/>
-            <Setter Property="FontWeight" Value="Bold"/>
-            <Setter Property="Margin" Value="0,8,0,0"/>
-        </Style>
-    </UserControl.Styles>
+    <StackPanel Classes="empty-state"
+                IsVisible="{Binding Total, Converter={StaticResource CountToBool}, ConverterParameter=invert}">
+        <TextBlock Text="◫" Classes="glyph"/>
+        <TextBlock Text="Nothing to chart yet" Classes="title"/>
+        <TextBlock Text="Capture some traffic and the status-code mix, busiest hosts, content types, methods, originating processes and request rate over time all appear here."/>
+    </StackPanel>
+  </Panel>
 </UserControl>

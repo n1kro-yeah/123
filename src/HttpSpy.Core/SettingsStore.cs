@@ -126,11 +126,8 @@ public static class SettingsStore
         return new HttpSpySettings();
     }
 
-    public static void SaveSettings(HttpSpySettings settings)
-    {
-        System.IO.Directory.CreateDirectory(Directory);
-        File.WriteAllText(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
-    }
+    public static void SaveSettings(HttpSpySettings settings) =>
+        WriteAtomic(SettingsPath, JsonSerializer.Serialize(settings, JsonOptions));
 
     public static List<Rule> LoadRules()
     {
@@ -144,9 +141,20 @@ public static class SettingsStore
         return new List<Rule>();
     }
 
-    public static void SaveRules(IEnumerable<Rule> rules)
+    public static void SaveRules(IEnumerable<Rule> rules) =>
+        WriteAtomic(RulesPath, JsonSerializer.Serialize(rules.ToList(), JsonOptions));
+
+    /// <summary>
+    /// Writes via a temporary file and a rename. Settings are saved on every
+    /// option toggle and on shutdown; a crash part-way through a direct write
+    /// would leave truncated JSON that the next launch silently discards.
+    /// </summary>
+    private static void WriteAtomic(string path, string contents)
     {
         System.IO.Directory.CreateDirectory(Directory);
-        File.WriteAllText(RulesPath, JsonSerializer.Serialize(rules.ToList(), JsonOptions));
+        string temp = path + ".tmp";
+        File.WriteAllText(temp, contents);
+        if (File.Exists(path)) File.Replace(temp, path, destinationBackupFileName: null);
+        else File.Move(temp, path);
     }
 }

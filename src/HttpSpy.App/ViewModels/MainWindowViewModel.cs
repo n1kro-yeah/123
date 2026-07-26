@@ -12,6 +12,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using HttpSpy.App.Services;
 using HttpSpy.Core;
+using HttpSpy.Core.Analysis;
 using HttpSpy.Core.Export;
 using HttpSpy.Core.Models;
 using HttpSpy.Core.Proxy;
@@ -30,6 +31,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     private readonly Dictionary<Guid, SessionViewModel> _index = new();
     private readonly HttpSpySettings _settings;
     private readonly DispatcherTimer _statsTimer;
+    private readonly DispatcherTimer _refreshTimer;
+    private bool _refreshPending;
 
     public IDialogService? Dialogs { get; set; }
 
@@ -80,9 +83,19 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
         Submitter.RequestSent += OnSubmitterRequest;
 
+        Analysis.SessionSource = () => AllSessions.Select(v => v.Model).ToList();
+        Analysis.NavigateToSessionRequested += OnNavigateToSession;
+        Analysis.ExportRequested += ExportAnalysisReportAsync;
+
         _statsTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(750) };
         _statsTimer.Tick += (_, _) => UpdateStats();
         _statsTimer.Start();
+
+        // Re-filtering the grid is O(n); doing it per completed transaction made
+        // the UI unusable under load. Coalesce into one refresh per interval.
+        _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+        _refreshTimer.Tick += (_, _) => FlushPendingRefresh();
+        _refreshTimer.Start();
 
         LoadRules();
         foreach (var f in _settings.Filters) Filters.Add(f.Clone());
@@ -116,13 +129,24 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public InspectorViewModel Inspector { get; } = new();
     public DashboardViewModel Dashboard { get; } = new();
     public SubmitterViewModel Submitter { get; } = new();
+    public AnalysisViewModel Analysis { get; } = new();
 
     // ---- Capture state -------------------------------------------------------
     [ObservableProperty] private bool _isCapturing;
     [ObservableProperty] private int _listenPort;
     [ObservableProperty] private bool _decryptHttps;
     [ObservableProperty] private bool _setSystemProxy;
-    [ObservableProperty] private string _statusText = "Idle";
+
+    /// <summary>
+    /// Transient feedback for the last user action ("Copied 4 lines", "Saved…").
+    /// Kept separate from <see cref="StatsText"/>: both used to share one property,
+    /// so the 750 ms stats tick wiped every message before it could be read.
+    /// </summary>
+    [ObservableProperty] private string _statusText = "Ready";
+
+    /// <summary>Live capture counters, refreshed on a timer.</summary>
+    [ObservableProperty] private string _statsText = "■ Stopped";
+
     [ObservableProperty] private string _certStatus = "";
     [ObservableProperty] private bool _isCertTrusted;
     [ObservableProperty] private bool _hasSessions;
@@ -210,17 +234,27 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     public string[] ThrottlePresets { get; } =
         { "Custom", "GPRS (50 kbps)", "2G (250 kbps)", "3G (750 kbps)", "DSL (2 Mbps)", "Wi-Fi (30 Mbps)" };
 
-    partial void OnFilterTextChanged(string value) => SessionsView.Refresh();
-    partial void OnErrorsOnlyChanged(bool value) => SessionsView.Refresh();
-    partial void OnSearchBodiesChanged(bool value) => SessionsView.Refresh();
-    partial void OnMethodFilterChanged(string value) => SessionsView.Refresh();
+    partial void OnFilterTextChanged(string value) => RequestRefresh();
+    partial void OnErrorsOnlyChanged(bool value) => RequestRefresh();
+    partial void OnSearchBodiesChanged(bool value) => RequestRefresh();
+    partial void OnMethodFilterChanged(string value) => RequestRefresh();
 
     partial void OnSelectedSessionChanged(SessionViewModel? value) => Inspector.Session = value?.Model;
 
-    partial void OnListenPortChanged(int value) => _engine.Options.ListenPort = value;
+    partial void OnListenPortChanged(int value)
+    {
+        _engine.Options.ListenPort = value;
+        if (IsCapturing)
+            StatusText = $"Port changed to {value} — restart the capture (F5 twice) for it to take effect.";
+    }
+
     partial void OnDecryptHttpsChanged(bool value) => _engine.Options.DecryptHttps = value;
     partial void OnSetSystemProxyChanged(bool value) => _engine.Options.SetSystemProxy = value;
     partial void OnIsDarkThemeChanged(bool value) => ApplyTheme();
+    partial void OnAutoScrollChanged(bool value) => PersistSettings();
+
+    /// <summary>Upper bound on retained sessions; 0 disables trimming.</summary>
+    [ObservableProperty] private int _maxSessions = 20000;
 
     // ---- Engine event handlers (marshaled to UI thread) ----------------------
     private void OnSessionStarted(HttpSession s) => Dispatcher.UIThread.Post(() =>
@@ -228,6 +262,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var vm = new SessionViewModel(s);
         _index[s.Id] = vm;
         AllSessions.Add(vm);
+        TrimToSessionLimit();
         if (AutoScroll) SessionAppended?.Invoke(vm);
     });
 
@@ -237,9 +272,44 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             vm.Refresh();
             if (ReferenceEquals(vm, SelectedSession)) Inspector.Session = s;
-            SessionsView.Refresh();
+            RequestRefresh();
         }
     });
+
+    /// <summary>
+    /// Caps how many transactions are retained in the grid. An unattended capture
+    /// otherwise grows until the process runs out of memory — bodies included.
+    /// The oldest sessions are dropped first, but never the selected one, the
+    /// compare baseline, or anything the user bookmarked.
+    /// </summary>
+    private void TrimToSessionLimit()
+    {
+        if (MaxSessions <= 0 || AllSessions.Count <= MaxSessions) return;
+
+        int excess = AllSessions.Count - MaxSessions;
+        int removed = 0;
+        for (int i = 0; i < AllSessions.Count && removed < excess; )
+        {
+            var candidate = AllSessions[i];
+            if (candidate.Model.Bookmarked ||
+                ReferenceEquals(candidate, SelectedSession) ||
+                ReferenceEquals(candidate, CompareBaseline))
+            {
+                i++;
+                continue;
+            }
+            AllSessions.RemoveAt(i);
+            _index.Remove(candidate.Model.Id);
+            removed++;
+        }
+
+        if (removed > 0) _droppedSessions += removed;
+    }
+
+    private long _droppedSessions;
+
+    /// <summary>How many old sessions have been discarded to honour <see cref="MaxSessions"/>.</summary>
+    public long DroppedSessions => _droppedSessions;
 
     private void OnSessionUpdated(HttpSession s) => Dispatcher.UIThread.Post(() =>
     {
@@ -297,12 +367,20 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         {
             _engine.Start();
             IsCapturing = true;
-            StatusText = $"Capturing on 127.0.0.1:{_engine.Options.ListenPort}";
+            StatusText = $"Capturing on {_engine.Options.ListenAddress}:{_engine.Options.ListenPort}";
         }
         catch (Exception ex)
         {
+            IsCapturing = false;
             StatusText = $"Failed to start: {ex.Message}";
-            Dialogs?.ShowMessageAsync("Cannot start capture", ex.Message);
+
+            // The overwhelmingly common cause is the port already being taken;
+            // say so instead of surfacing a bare socket error code.
+            string hint = ex is System.Net.Sockets.SocketException
+                ? $"\n\nPort {_engine.Options.ListenPort} is most likely already in use. " +
+                  "Pick a different port in the toolbar and try again."
+                : string.Empty;
+            _ = Dialogs?.ShowMessageAsync("Cannot start capture", ex.Message + hint);
         }
     }
 
@@ -312,7 +390,11 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         if (!IsCapturing) return;
         _engine.Stop();
         IsCapturing = false;
-        StatusText = "Stopped";
+
+        // Stopping releases paused transactions engine-side; clear the UI queue too.
+        Breakpoints.Clear();
+        CurrentBreakpoint = null;
+        StatusText = "Capture stopped";
     }
 
     [RelayCommand]
@@ -321,7 +403,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         AllSessions.Clear();
         _index.Clear();
         SelectedSession = null;
+        // These held references into the cleared list; leaving them dangling made
+        // "Compare with baseline" act on a session no longer in the grid.
+        CompareBaseline = null;
         Inspector.Session = null;
+        _droppedSessions = 0;
+        StatusText = "Capture cleared";
     }
 
     [RelayCommand]
@@ -329,9 +416,52 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (SelectedSession is null) return;
         var vm = SelectedSession;
+
+        // Keep the selection somewhere sensible instead of dropping it entirely.
+        int position = AllSessions.IndexOf(vm);
         AllSessions.Remove(vm);
         _index.Remove(vm.Model.Id);
-        SelectedSession = null;
+        if (ReferenceEquals(CompareBaseline, vm)) CompareBaseline = null;
+
+        SelectedSession = AllSessions.Count == 0
+            ? null
+            : AllSessions[Math.Min(position, AllSessions.Count - 1)];
+    }
+
+    /// <summary>Removes every session currently hidden by the active filters.</summary>
+    [RelayCommand]
+    private void DeleteFilteredOut()
+    {
+        var doomed = AllSessions.Where(v => !PassesFilter(v) && !v.Model.Bookmarked).ToList();
+        if (doomed.Count == 0) { StatusText = "Nothing to remove"; return; }
+
+        foreach (var vm in doomed)
+        {
+            AllSessions.Remove(vm);
+            _index.Remove(vm.Model.Id);
+            if (ReferenceEquals(CompareBaseline, vm)) CompareBaseline = null;
+            if (ReferenceEquals(SelectedSession, vm)) SelectedSession = null;
+        }
+        RequestRefresh();
+        StatusText = $"Removed {doomed.Count} filtered-out session(s)";
+    }
+
+    /// <summary>Removes everything except bookmarked sessions.</summary>
+    [RelayCommand]
+    private void KeepOnlyBookmarked()
+    {
+        var doomed = AllSessions.Where(v => !v.Model.Bookmarked).ToList();
+        if (doomed.Count == 0) { StatusText = "Nothing to remove"; return; }
+
+        foreach (var vm in doomed)
+        {
+            AllSessions.Remove(vm);
+            _index.Remove(vm.Model.Id);
+            if (ReferenceEquals(CompareBaseline, vm)) CompareBaseline = null;
+            if (ReferenceEquals(SelectedSession, vm)) SelectedSession = null;
+        }
+        RequestRefresh();
+        StatusText = $"Kept {AllSessions.Count} bookmarked session(s)";
     }
 
     [RelayCommand]
@@ -361,6 +491,79 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (SelectedSession is null || Dialogs is null) return;
         await Dialogs.SetClipboardAsync(SelectedSession.Model.ResponseBodyText);
+        StatusText = $"Copied {SelectedSession.Model.ResponseBodySize:N0} byte response body";
+    }
+
+    [RelayCommand]
+    private async Task CopyRequestBody()
+    {
+        if (SelectedSession is null || Dialogs is null) return;
+        await Dialogs.SetClipboardAsync(SelectedSession.Model.RequestBodyText);
+        StatusText = $"Copied {SelectedSession.Model.RequestBodySize:N0} byte request body";
+    }
+
+    /// <summary>Shows the full keyboard-shortcut reference.</summary>
+    [RelayCommand]
+    private async Task ShowShortcuts()
+    {
+        if (Dialogs is null) return;
+        await Dialogs.ShowMessageAsync("Keyboard shortcuts",
+            """
+            Capture
+              F5                Start / stop capturing
+              Ctrl+L            Clear all sessions
+              Delete            Delete the selected session
+
+            Navigation
+              Ctrl+1 … Ctrl+6   Capture, Dashboard, Analysis, Submitter, Rules, Log
+              Ctrl+F            Focus the quick filter
+              Ctrl+Shift+F      Focus the header/body search
+              F3                Find next match
+              Ctrl+Shift+L      Clear every filter
+
+            Session
+              Ctrl+R            Resend in the Submitter
+              Ctrl+U            Copy the URL
+              Ctrl+Shift+C      Copy as cURL
+              Ctrl+B            Toggle bookmark
+
+            Files & analysis
+              Ctrl+O            Open a saved .hspy capture
+              Ctrl+S            Save the capture
+              Ctrl+Shift+A      Analyse the capture
+            """);
+    }
+
+    /// <summary>Explains the first-run setup, which is easy to get wrong.</summary>
+    [RelayCommand]
+    private async Task ShowGettingStarted()
+    {
+        if (Dialogs is null) return;
+        await Dialogs.ShowMessageAsync("Getting started",
+            $"""
+            1. Trust the root certificate
+               HTTPS ▸ Trust root certificate. HttpSpy decrypts TLS by presenting its own
+               certificate, so the client has to trust the HttpSpy root CA first.
+               The public certificate is also exported to:
+               {RootCertificatePath}
+
+            2. Start capturing (F5)
+               On Windows the system proxy is pointed at HttpSpy automatically.
+               Elsewhere, configure your client to use the proxy at
+               {_engine.Options.ListenAddress}:{_engine.Options.ListenPort}.
+
+            3. Inspect
+               Select any row to see headers, cookies, the decoded body, a JSON tree,
+               the timing waterfall and ready-to-run client code.
+
+            4. Intervene
+               The Rules tab can block, redirect, mock, delay, rewrite and break on
+               matching traffic. Press Apply to arm the rule set.
+
+            5. Analyse (Ctrl+Shift+A)
+               The Analysis tab scans the whole capture for security, privacy,
+               performance, caching and correctness problems, and scores the result.
+            """);
     }
 
     [RelayCommand]
@@ -386,7 +589,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         if (SelectedSession is null) return;
         Submitter.LoadFrom(SelectedSession.Model);
-        ActiveTabIndex = 2; // Submitter tab
+        ActiveTabIndex = TabSubmitter;
+        StatusText = $"Loaded #{SelectedSession.Index} into the Submitter";
     }
 
     [RelayCommand]
@@ -562,17 +766,79 @@ public sealed partial class MainWindowViewModel : ViewModelBase
 
     partial void OnActiveTabIndexChanged(int value)
     {
-        if (value == 1) RefreshDashboard();
+        // The dashboard aggregates the whole capture, so recompute it lazily when
+        // the tab is actually shown rather than on every captured transaction.
+        if (value == TabDashboard) Dashboard.Recompute(AllSessions.Select(v => v.Model).ToList());
     }
 
     [RelayCommand]
-    private void RefreshDashboard() => Dashboard.Recompute(AllSessions.Select(v => v.Model).ToList());
+    private void RefreshDashboard()
+    {
+        Dashboard.Recompute(AllSessions.Select(v => v.Model).ToList());
+        StatusText = $"Dashboard refreshed over {AllSessions.Count} session(s)";
+    }
 
-    /// <summary>Switches the main tab (used by Ctrl+1..4 keyboard shortcuts).</summary>
+    /// <summary>Tab indices, kept in one place so shortcuts and code agree.</summary>
+    public const int TabCapture = 0;
+    public const int TabDashboard = 1;
+    public const int TabAnalysis = 2;
+    public const int TabSubmitter = 3;
+    public const int TabRules = 4;
+    public const int TabLog = 5;
+    private const int TabCount = 6;
+
+    /// <summary>Switches the main tab (used by the Ctrl+1..6 keyboard shortcuts).</summary>
     [RelayCommand]
     private void SelectTab(string index)
     {
-        if (int.TryParse(index, out var i) && i >= 0 && i <= 3) ActiveTabIndex = i;
+        if (int.TryParse(index, out var i) && i >= 0 && i < TabCount) ActiveTabIndex = i;
+    }
+
+    /// <summary>Selects the session with the given grid index and reveals it.</summary>
+    private void OnNavigateToSession(int sessionIndex)
+    {
+        var match = AllSessions.FirstOrDefault(v => v.Index == sessionIndex);
+        if (match is null)
+        {
+            StatusText = $"Session #{sessionIndex} is no longer in the capture";
+            return;
+        }
+        ActiveTabIndex = TabCapture;
+        SelectedSession = match;
+        SessionAppended?.Invoke(match); // reuse the scroll-into-view hook
+        StatusText = $"Jumped to session #{sessionIndex}";
+    }
+
+    /// <summary>Writes an analysis report to disk in the requested format.</summary>
+    private async Task ExportAnalysisReportAsync(AnalysisReport report, string format)
+    {
+        if (Dialogs is null) return;
+
+        var (title, suggested, filter) = format switch
+        {
+            "html" => ("Export analysis report", "httpspy-analysis.html", ("HTML report", "html")),
+            "json" => ("Export analysis report", "httpspy-analysis.json", ("JSON", "json")),
+            _ => ("Export analysis report", "httpspy-analysis.txt", ("Text", "txt")),
+        };
+
+        var path = await Dialogs.SaveFileAsync(title, suggested, new[] { filter });
+        if (path is null) return;
+
+        try
+        {
+            string content = format switch
+            {
+                "html" => AnalysisReportWriter.ToHtml(report),
+                "json" => AnalysisReportWriter.ToJson(report),
+                _ => AnalysisReportWriter.ToText(report),
+            };
+            await File.WriteAllTextAsync(path, content);
+            StatusText = $"Analysis report exported to {path}";
+        }
+        catch (Exception ex)
+        {
+            await Dialogs.ShowMessageAsync("Export failed", ex.Message);
+        }
     }
 
     [RelayCommand]
@@ -1010,11 +1276,30 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         var st = _engine.Statistics;
         string capturing = IsCapturing ? "● REC" : "■ Stopped";
         string sim = _engine.Options.ThrottleEnabled ? $"   ⚡ {_engine.Options.ThrottleKbps} kbps" : "";
-        StatusText = $"{capturing}   Sessions: {AllSessions.Count}   Active conns: {st.ActiveConnections}   " +
-                     $"In: {Converters.ByteSizeConverter.Format(st.BytesReceived)}   " +
-                     $"Out: {Converters.ByteSizeConverter.Format(st.BytesSent)}   Errors: {st.Errors}{sim}";
+        int shown = SessionsView.Count;
+        string filtered = shown != AllSessions.Count ? $" ({shown} shown)" : "";
+
+        StatsText = $"{capturing}   Sessions: {AllSessions.Count}{filtered}   " +
+                    $"Active conns: {st.ActiveConnections}   " +
+                    $"In: {Converters.ByteSizeConverter.Format(st.BytesReceived)}   " +
+                    $"Out: {Converters.ByteSizeConverter.Format(st.BytesSent)}   Errors: {st.Errors}{sim}";
+
         if (string.IsNullOrEmpty(CertStatus))
             RefreshCertStatus();
+    }
+
+    /// <summary>
+    /// Requests a grid re-filter. Many of these collapse into a single refresh on
+    /// the next timer tick, which is what keeps the UI responsive when hundreds of
+    /// transactions complete per second.
+    /// </summary>
+    private void RequestRefresh() => _refreshPending = true;
+
+    private void FlushPendingRefresh()
+    {
+        if (!_refreshPending) return;
+        _refreshPending = false;
+        SessionsView.Refresh();
     }
 
     public string RootCertificatePath => _engine.CertificateAuthority.RootCertificatePath;
@@ -1023,7 +1308,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     {
         PersistSettings();
         try { SettingsStore.SaveRules(Rules.Select(r => r.Rule)); } catch { /* ignore */ }
+
         _statsTimer.Stop();
+        _refreshTimer.Stop();
+
+        // Release anything the user left paused, or the engine's worker tasks
+        // would block on a breakpoint that no window is left to resolve.
+        foreach (var bp in Breakpoints.ToList()) bp.Paused.Resume();
+        Breakpoints.Clear();
+        CurrentBreakpoint = null;
+
         _engine.Dispose();
     }
 }

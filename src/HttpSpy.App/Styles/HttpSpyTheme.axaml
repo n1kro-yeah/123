@@ -1,0 +1,654 @@
+<!--
+    HttpSpy design system
+    ====================================================================
+    One place for every colour, spacing value and control style in the app.
+
+    Why this file exists: the UI used to hard-code translucent literals like
+    "#22000000" and "#FFB0C4DE" directly in the views. Those were tuned by eye
+    against the dark theme, so in light mode the toolbar washed out to white on
+    white and several labels dropped to unreadable contrast. Everything here is
+    expressed as a *token* resolved per theme variant, so both themes stay
+    legible and a colour only ever has to change in one place.
+
+    Structure:
+      1. Theme tokens   — semantic colours + brushes, Dark and Light
+      2. Metrics        — spacing, radii, type sizes
+      3. Control styles — Button, TextBox, ComboBox, CheckBox, Menu, TabControl,
+                          DataGrid, ScrollViewer, ToolTip
+      4. Component classes — .toolbar, .card, .pill, .badge, .kpi, .section,
+                          .mono, .muted, .danger, .empty-state
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Styles.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+
+                <!-- ========================================================
+                     1a. DARK  — GitHub-dark-ish, tuned for long sessions in a
+                     dim room. Surfaces step up in lightness with elevation.
+                     ======================================================== -->
+                <ResourceDictionary x:Key="Dark">
+                    <!-- Surfaces -->
+                    <Color x:Key="SpyBackgroundColor">#0D1117</Color>
+                    <Color x:Key="SpySurfaceColor">#161B22</Color>
+                    <Color x:Key="SpySurfaceRaisedColor">#1C2129</Color>
+                    <Color x:Key="SpySurfaceOverlayColor">#22272E</Color>
+                    <Color x:Key="SpyChromeColor">#10151C</Color>
+
+                    <!-- Lines -->
+                    <Color x:Key="SpyBorderColor">#30363D</Color>
+                    <Color x:Key="SpyBorderStrongColor">#444C56</Color>
+                    <Color x:Key="SpyDividerColor">#21262D</Color>
+
+                    <!-- Text -->
+                    <Color x:Key="SpyTextColor">#E6EDF3</Color>
+                    <Color x:Key="SpyTextMutedColor">#8B949E</Color>
+                    <Color x:Key="SpyTextFaintColor">#6E7681</Color>
+                    <Color x:Key="SpyTextInvertedColor">#0D1117</Color>
+
+                    <!-- Accent -->
+                    <Color x:Key="SpyAccentColor">#2F81F7</Color>
+                    <Color x:Key="SpyAccentHoverColor">#4C93FF</Color>
+                    <Color x:Key="SpyAccentPressedColor">#1F6FEB</Color>
+                    <Color x:Key="SpyAccentSubtleColor">#182B4D</Color>
+
+                    <!-- Status -->
+                    <Color x:Key="SpySuccessColor">#3FB950</Color>
+                    <Color x:Key="SpyWarningColor">#D29922</Color>
+                    <Color x:Key="SpyDangerColor">#F85149</Color>
+                    <Color x:Key="SpyInfoColor">#58A6FF</Color>
+                    <Color x:Key="SpyPurpleColor">#BC8CFF</Color>
+                    <Color x:Key="SpyTealColor">#39C5CF</Color>
+
+                    <!-- Status backgrounds for pills: dark, low-saturation fills
+                         that keep the coloured text readable. -->
+                    <Color x:Key="SpySuccessSubtleColor">#12291A</Color>
+                    <Color x:Key="SpyWarningSubtleColor">#2E2412</Color>
+                    <Color x:Key="SpyDangerSubtleColor">#3A1518</Color>
+                    <Color x:Key="SpyInfoSubtleColor">#15243D</Color>
+                    <Color x:Key="SpyPurpleSubtleColor">#26193D</Color>
+
+                    <!-- Row states -->
+                    <Color x:Key="SpyRowAltColor">#11161D</Color>
+                    <Color x:Key="SpyRowHoverColor">#1B222B</Color>
+                    <Color x:Key="SpyRowSelectedColor">#173156</Color>
+
+                    <!-- Syntax -->
+                    <Color x:Key="SpySyntaxKeyColor">#79C0FF</Color>
+                    <Color x:Key="SpySyntaxStringColor">#A5D6FF</Color>
+                    <Color x:Key="SpySyntaxNumberColor">#F0883E</Color>
+                    <Color x:Key="SpySyntaxLiteralColor">#D2A8FF</Color>
+                    <Color x:Key="SpySyntaxPunctuationColor">#8B949E</Color>
+                </ResourceDictionary>
+
+                <!-- ========================================================
+                     1b. LIGHT — the same semantic roles, re-derived so every
+                     token keeps at least a 4.5:1 contrast ratio on white.
+                     ======================================================== -->
+                <ResourceDictionary x:Key="Light">
+                    <Color x:Key="SpyBackgroundColor">#FFFFFF</Color>
+                    <Color x:Key="SpySurfaceColor">#F6F8FA</Color>
+                    <Color x:Key="SpySurfaceRaisedColor">#EEF1F5</Color>
+                    <Color x:Key="SpySurfaceOverlayColor">#FFFFFF</Color>
+                    <Color x:Key="SpyChromeColor">#F0F3F6</Color>
+
+                    <Color x:Key="SpyBorderColor">#D0D7DE</Color>
+                    <Color x:Key="SpyBorderStrongColor">#AFB8C1</Color>
+                    <Color x:Key="SpyDividerColor">#E4E8EC</Color>
+
+                    <Color x:Key="SpyTextColor">#1F2328</Color>
+                    <Color x:Key="SpyTextMutedColor">#59636E</Color>
+                    <Color x:Key="SpyTextFaintColor">#818B98</Color>
+                    <Color x:Key="SpyTextInvertedColor">#FFFFFF</Color>
+
+                    <Color x:Key="SpyAccentColor">#0969DA</Color>
+                    <Color x:Key="SpyAccentHoverColor">#218BFF</Color>
+                    <Color x:Key="SpyAccentPressedColor">#0550AE</Color>
+                    <Color x:Key="SpyAccentSubtleColor">#DDF4FF</Color>
+
+                    <!-- Darker than the dark-theme equivalents: these are read
+                         as text on a near-white background. -->
+                    <Color x:Key="SpySuccessColor">#1A7F37</Color>
+                    <Color x:Key="SpyWarningColor">#9A6700</Color>
+                    <Color x:Key="SpyDangerColor">#CF222E</Color>
+                    <Color x:Key="SpyInfoColor">#0969DA</Color>
+                    <Color x:Key="SpyPurpleColor">#8250DF</Color>
+                    <Color x:Key="SpyTealColor">#137E80</Color>
+
+                    <Color x:Key="SpySuccessSubtleColor">#DAFBE1</Color>
+                    <Color x:Key="SpyWarningSubtleColor">#FFF8C5</Color>
+                    <Color x:Key="SpyDangerSubtleColor">#FFEBE9</Color>
+                    <Color x:Key="SpyInfoSubtleColor">#DDF4FF</Color>
+                    <Color x:Key="SpyPurpleSubtleColor">#FBEFFF</Color>
+
+                    <Color x:Key="SpyRowAltColor">#FAFBFC</Color>
+                    <Color x:Key="SpyRowHoverColor">#EEF2F6</Color>
+                    <Color x:Key="SpyRowSelectedColor">#CFE6FF</Color>
+
+                    <Color x:Key="SpySyntaxKeyColor">#0550AE</Color>
+                    <Color x:Key="SpySyntaxStringColor">#0A3069</Color>
+                    <Color x:Key="SpySyntaxNumberColor">#953800</Color>
+                    <Color x:Key="SpySyntaxLiteralColor">#8250DF</Color>
+                    <Color x:Key="SpySyntaxPunctuationColor">#59636E</Color>
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <!-- ============================================================
+                 Brushes. Declared once against the theme-resolved colours so
+                 views bind to a brush and never to a raw literal.
+                 ============================================================ -->
+            <SolidColorBrush x:Key="SpyBackgroundBrush" Color="{DynamicResource SpyBackgroundColor}"/>
+            <SolidColorBrush x:Key="SpySurfaceBrush" Color="{DynamicResource SpySurfaceColor}"/>
+            <SolidColorBrush x:Key="SpySurfaceRaisedBrush" Color="{DynamicResource SpySurfaceRaisedColor}"/>
+            <SolidColorBrush x:Key="SpySurfaceOverlayBrush" Color="{DynamicResource SpySurfaceOverlayColor}"/>
+            <SolidColorBrush x:Key="SpyChromeBrush" Color="{DynamicResource SpyChromeColor}"/>
+
+            <SolidColorBrush x:Key="SpyBorderBrush" Color="{DynamicResource SpyBorderColor}"/>
+            <SolidColorBrush x:Key="SpyBorderStrongBrush" Color="{DynamicResource SpyBorderStrongColor}"/>
+            <SolidColorBrush x:Key="SpyDividerBrush" Color="{DynamicResource SpyDividerColor}"/>
+
+            <SolidColorBrush x:Key="SpyTextBrush" Color="{DynamicResource SpyTextColor}"/>
+            <SolidColorBrush x:Key="SpyTextMutedBrush" Color="{DynamicResource SpyTextMutedColor}"/>
+            <SolidColorBrush x:Key="SpyTextFaintBrush" Color="{DynamicResource SpyTextFaintColor}"/>
+            <SolidColorBrush x:Key="SpyTextInvertedBrush" Color="{DynamicResource SpyTextInvertedColor}"/>
+
+            <SolidColorBrush x:Key="SpyAccentBrush" Color="{DynamicResource SpyAccentColor}"/>
+            <SolidColorBrush x:Key="SpyAccentHoverBrush" Color="{DynamicResource SpyAccentHoverColor}"/>
+            <SolidColorBrush x:Key="SpyAccentPressedBrush" Color="{DynamicResource SpyAccentPressedColor}"/>
+            <SolidColorBrush x:Key="SpyAccentSubtleBrush" Color="{DynamicResource SpyAccentSubtleColor}"/>
+
+            <SolidColorBrush x:Key="SpySuccessBrush" Color="{DynamicResource SpySuccessColor}"/>
+            <SolidColorBrush x:Key="SpyWarningBrush" Color="{DynamicResource SpyWarningColor}"/>
+            <SolidColorBrush x:Key="SpyDangerBrush" Color="{DynamicResource SpyDangerColor}"/>
+            <SolidColorBrush x:Key="SpyInfoBrush" Color="{DynamicResource SpyInfoColor}"/>
+            <SolidColorBrush x:Key="SpyPurpleBrush" Color="{DynamicResource SpyPurpleColor}"/>
+            <SolidColorBrush x:Key="SpyTealBrush" Color="{DynamicResource SpyTealColor}"/>
+
+            <SolidColorBrush x:Key="SpySuccessSubtleBrush" Color="{DynamicResource SpySuccessSubtleColor}"/>
+            <SolidColorBrush x:Key="SpyWarningSubtleBrush" Color="{DynamicResource SpyWarningSubtleColor}"/>
+            <SolidColorBrush x:Key="SpyDangerSubtleBrush" Color="{DynamicResource SpyDangerSubtleColor}"/>
+            <SolidColorBrush x:Key="SpyInfoSubtleBrush" Color="{DynamicResource SpyInfoSubtleColor}"/>
+            <SolidColorBrush x:Key="SpyPurpleSubtleBrush" Color="{DynamicResource SpyPurpleSubtleColor}"/>
+
+            <SolidColorBrush x:Key="SpyRowAltBrush" Color="{DynamicResource SpyRowAltColor}"/>
+            <SolidColorBrush x:Key="SpyRowHoverBrush" Color="{DynamicResource SpyRowHoverColor}"/>
+            <SolidColorBrush x:Key="SpyRowSelectedBrush" Color="{DynamicResource SpyRowSelectedColor}"/>
+
+            <!-- ============================================================
+                 2. Metrics
+                 ============================================================ -->
+            <x:Double x:Key="SpyFontSizeXs">11</x:Double>
+            <x:Double x:Key="SpyFontSizeSm">12</x:Double>
+            <x:Double x:Key="SpyFontSizeMd">13</x:Double>
+            <x:Double x:Key="SpyFontSizeLg">15</x:Double>
+            <x:Double x:Key="SpyFontSizeXl">18</x:Double>
+            <x:Double x:Key="SpyFontSizeDisplay">28</x:Double>
+
+            <CornerRadius x:Key="SpyRadiusSm">4</CornerRadius>
+            <CornerRadius x:Key="SpyRadiusMd">6</CornerRadius>
+            <CornerRadius x:Key="SpyRadiusLg">10</CornerRadius>
+            <CornerRadius x:Key="SpyRadiusPill">999</CornerRadius>
+
+            <Thickness x:Key="SpyPadTight">6,3</Thickness>
+            <Thickness x:Key="SpyPadControl">10,5</Thickness>
+            <Thickness x:Key="SpyPadPanel">12</Thickness>
+            <Thickness x:Key="SpyPadCard">16,12</Thickness>
+
+            <!-- A single monospace stack, so every code/raw/hex surface matches. -->
+            <FontFamily x:Key="SpyMonoFont">Cascadia Mono,Cascadia Code,JetBrains Mono,Consolas,DejaVu Sans Mono,Menlo,monospace</FontFamily>
+        </ResourceDictionary>
+    </Styles.Resources>
+
+    <!-- ================================================================
+         3. Control styles
+         ================================================================ -->
+
+    <!-- Window  -->
+    <Style Selector="Window">
+        <Setter Property="Background" Value="{DynamicResource SpyBackgroundBrush}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeMd}"/>
+    </Style>
+
+    <!-- Text  -->
+    <Style Selector="TextBlock">
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+    </Style>
+
+    <Style Selector="TextBlock.muted">
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextMutedBrush}"/>
+    </Style>
+
+    <Style Selector="TextBlock.faint">
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextFaintBrush}"/>
+    </Style>
+
+    <!-- Grouped across types would resolve to their common base (Control), which
+         has no FontFamily, so each target is declared separately. -->
+    <Style Selector="TextBlock.mono">
+        <Setter Property="FontFamily" Value="{DynamicResource SpyMonoFont}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+    </Style>
+
+    <Style Selector="SelectableTextBlock.mono">
+        <Setter Property="FontFamily" Value="{DynamicResource SpyMonoFont}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+    </Style>
+
+    <Style Selector="TextBox.mono">
+        <Setter Property="FontFamily" Value="{DynamicResource SpyMonoFont}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+    </Style>
+
+    <Style Selector="TextBlock.section">
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeLg}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,10,0,4"/>
+    </Style>
+
+    <Style Selector="TextBlock.h1">
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeXl}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style Selector="TextBlock.success"><Setter Property="Foreground" Value="{DynamicResource SpySuccessBrush}"/></Style>
+    <Style Selector="TextBlock.warning"><Setter Property="Foreground" Value="{DynamicResource SpyWarningBrush}"/></Style>
+    <Style Selector="TextBlock.danger"><Setter Property="Foreground" Value="{DynamicResource SpyDangerBrush}"/></Style>
+    <Style Selector="TextBlock.accent"><Setter Property="Foreground" Value="{DynamicResource SpyAccentBrush}"/></Style>
+
+    <!-- Buttons  -->
+    <Style Selector="Button">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceRaisedBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusMd}"/>
+        <Setter Property="Padding" Value="{DynamicResource SpyPadControl}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeMd}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Cursor" Value="Hand"/>
+    </Style>
+
+    <Style Selector="Button:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceOverlayBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderStrongBrush}"/>
+    </Style>
+
+    <Style Selector="Button:pressed /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceBrush}"/>
+    </Style>
+
+    <Style Selector="Button:disabled">
+        <Setter Property="Opacity" Value="0.45"/>
+        <Setter Property="Cursor" Value="Arrow"/>
+    </Style>
+
+    <!-- The one call-to-action per screen: start/stop capture. -->
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="{DynamicResource SpyAccentBrush}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyAccentPressedBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.primary /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SpyAccentBrush}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SpyAccentHoverBrush}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
+    <!-- Capture is running: the same button turns into a stop control. -->
+    <Style Selector="Button.recording">
+        <Setter Property="Background" Value="{DynamicResource SpyDangerBrush}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyDangerBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+    <Style Selector="Button.recording /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SpyDangerBrush}"/>
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+    </Style>
+
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextMutedBrush}"/>
+        <Setter Property="Padding" Value="{DynamicResource SpyPadTight}"/>
+    </Style>
+    <Style Selector="Button.ghost /template/ ContentPresenter">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceRaisedBrush}"/>
+    </Style>
+
+    <Style Selector="Button.danger">
+        <Setter Property="Foreground" Value="{DynamicResource SpyDangerBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyDangerBrush}"/>
+    </Style>
+
+    <!-- Toggle / drop-down buttons pick up the same surface treatment. -->
+    <Style Selector="ToggleButton, DropDownButton, SplitButton">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceRaisedBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusMd}"/>
+        <Setter Property="Padding" Value="{DynamicResource SpyPadControl}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <!-- Inputs  -->
+    <Style Selector="TextBox">
+        <Setter Property="Background" Value="{DynamicResource SpyBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusMd}"/>
+        <Setter Property="Padding" Value="{DynamicResource SpyPadControl}"/>
+        <Setter Property="SelectionBrush" Value="{DynamicResource SpyAccentBrush}"/>
+        <Setter Property="CaretBrush" Value="{DynamicResource SpyTextBrush}"/>
+    </Style>
+
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyAccentBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+
+    <!-- Read-only viewers should read as panels, not as editable fields. -->
+    <Style Selector="TextBox.viewer">
+        <Setter Property="FontFamily" Value="{DynamicResource SpyMonoFont}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceBrush}"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="0"/>
+    </Style>
+
+    <Style Selector="ComboBox">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceRaisedBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusMd}"/>
+        <Setter Property="Padding" Value="{DynamicResource SpyPadControl}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style Selector="NumericUpDown">
+        <Setter Property="Background" Value="{DynamicResource SpyBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusMd}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style Selector="CheckBox">
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="MinHeight" Value="0"/>
+    </Style>
+
+    <!-- Menus  -->
+    <Style Selector="Menu">
+        <Setter Property="Background" Value="{DynamicResource SpyChromeBrush}"/>
+    </Style>
+
+    <Style Selector="Menu > MenuItem">
+        <Setter Property="Padding" Value="10,6"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+    </Style>
+
+    <!-- Tabs  -->
+    <Style Selector="TabControl">
+        <Setter Property="Background" Value="{DynamicResource SpyBackgroundBrush}"/>
+        <Setter Property="Padding" Value="0"/>
+    </Style>
+
+    <Style Selector="TabControl /template/ ItemsPresenter#PART_ItemsPresenter">
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+
+    <Style Selector="TabItem">
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeMd}"/>
+        <Setter Property="FontWeight" Value="Normal"/>
+        <Setter Property="Padding" Value="14,7"/>
+        <Setter Property="MinHeight" Value="0"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextMutedBrush}"/>
+    </Style>
+
+    <Style Selector="TabItem:selected">
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <Style Selector="TabItem:pointerover /template/ Border#PART_LayoutRoot">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceBrush}"/>
+    </Style>
+
+    <!-- Grid  -->
+    <Style Selector="DataGrid">
+        <Setter Property="Background" Value="{DynamicResource SpyBackgroundBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource SpyDividerBrush}"/>
+        <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource SpyDividerBrush}"/>
+        <Setter Property="RowBackground" Value="Transparent"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+        <Setter Property="RowHeight" Value="26"/>
+    </Style>
+
+    <Style Selector="DataGridColumnHeader">
+        <Setter Property="Background" Value="{DynamicResource SpyChromeBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextMutedBrush}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeXs}"/>
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="SeparatorBrush" Value="{DynamicResource SpyBorderBrush}"/>
+    </Style>
+
+    <Style Selector="DataGridRow:pointerover /template/ Rectangle#BackgroundRectangle">
+        <Setter Property="Fill" Value="{DynamicResource SpyRowHoverBrush}"/>
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+
+    <Style Selector="DataGridCell">
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+    </Style>
+
+    <Style Selector="DataGridCell:focus /template/ Grid#FocusVisual">
+        <Setter Property="IsVisible" Value="False"/>
+    </Style>
+
+    <!-- Lists / trees  -->
+    <Style Selector="ListBox">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusMd}"/>
+    </Style>
+
+    <Style Selector="ListBoxItem">
+        <Setter Property="Padding" Value="8,5"/>
+        <Setter Property="MinHeight" Value="0"/>
+    </Style>
+
+    <Style Selector="TreeView">
+        <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <!-- Misc  -->
+    <Style Selector="GridSplitter">
+        <Setter Property="Background" Value="{DynamicResource SpyDividerBrush}"/>
+    </Style>
+
+    <Style Selector="GridSplitter:pointerover">
+        <Setter Property="Background" Value="{DynamicResource SpyAccentBrush}"/>
+    </Style>
+
+    <Style Selector="ToolTip">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceOverlayBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusMd}"/>
+        <Setter Property="MaxWidth" Value="420"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+    </Style>
+
+    <Style Selector="ProgressBar">
+        <Setter Property="Foreground" Value="{DynamicResource SpyAccentBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceRaisedBrush}"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusPill}"/>
+        <Setter Property="MinHeight" Value="4"/>
+        <Setter Property="Height" Value="4"/>
+    </Style>
+
+    <!-- ================================================================
+         4. Component classes
+         ================================================================ -->
+
+    <!-- Chrome bars: menu strip, toolbar, filter bar, status bar. -->
+    <!-- Avalonia 11.2's WrapPanel has no ItemSpacing/LineSpacing, so a toolbar
+         that must reflow spaces its children with a uniform margin instead. -->
+    <Style Selector="WrapPanel.spaced > :is(Control)">
+        <Setter Property="Margin" Value="0,0,7,0"/>
+    </Style>
+
+    <Style Selector="Border.chrome">
+        <Setter Property="Background" Value="{DynamicResource SpyChromeBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+    </Style>
+
+    <Style Selector="Border.toolbar">
+        <Setter Property="Background" Value="{DynamicResource SpyChromeBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Padding" Value="10,7"/>
+    </Style>
+
+    <Style Selector="Border.statusbar">
+        <Setter Property="Background" Value="{DynamicResource SpyChromeBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,1,0,0"/>
+        <Setter Property="Padding" Value="12,5"/>
+    </Style>
+
+    <Style Selector="Border.panel">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusMd}"/>
+        <Setter Property="Padding" Value="{DynamicResource SpyPadPanel}"/>
+    </Style>
+
+    <Style Selector="Border.card">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusLg}"/>
+        <Setter Property="Padding" Value="{DynamicResource SpyPadCard}"/>
+        <Setter Property="Margin" Value="0,0,12,12"/>
+        <Setter Property="MinWidth" Value="150"/>
+    </Style>
+
+    <!-- A thin vertical rule between toolbar groups. -->
+    <Style Selector="Border.vsep">
+        <Setter Property="Background" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="Width" Value="1"/>
+        <Setter Property="Margin" Value="4,2"/>
+        <Setter Property="VerticalAlignment" Value="Stretch"/>
+    </Style>
+
+    <!-- KPI tiles on the dashboard. -->
+    <Style Selector="TextBlock.kpiLabel">
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextMutedBrush}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+    </Style>
+
+    <Style Selector="TextBlock.kpiValue">
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeDisplay}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+
+    <!-- Pills: compact status chips used in the grid and status bar. -->
+    <Style Selector="Border.pill">
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusPill}"/>
+        <Setter Property="Padding" Value="8,1"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="HorizontalAlignment" Value="Left"/>
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceRaisedBrush}"/>
+    </Style>
+
+    <Style Selector="Border.pill > TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeXs}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+    </Style>
+
+    <!-- Severity badges in the analysis report. -->
+    <Style Selector="Border.badge">
+        <Setter Property="CornerRadius" Value="{DynamicResource SpyRadiusSm}"/>
+        <Setter Property="Padding" Value="7,1"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
+
+    <Style Selector="Border.badge > TextBlock">
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeXs}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+    </Style>
+
+    <!-- Empty states shown instead of a blank grid. -->
+    <Style Selector="StackPanel.empty-state">
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+        <Setter Property="Spacing" Value="10"/>
+        <Setter Property="MaxWidth" Value="480"/>
+    </Style>
+
+    <Style Selector="StackPanel.empty-state > TextBlock">
+        <Setter Property="HorizontalAlignment" Value="Center"/>
+        <Setter Property="TextAlignment" Value="Center"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextMutedBrush}"/>
+    </Style>
+
+    <Style Selector="StackPanel.empty-state > TextBlock.glyph">
+        <Setter Property="FontSize" Value="44"/>
+        <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+
+    <Style Selector="StackPanel.empty-state > TextBlock.title">
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeXl}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextBrush}"/>
+    </Style>
+
+    <!-- The breakpoint banner: deliberately loud, it blocks live traffic. -->
+    <Style Selector="Border.breakpoint">
+        <Setter Property="Background" Value="{DynamicResource SpyWarningSubtleBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyWarningBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,2"/>
+        <Setter Property="Padding" Value="12,10"/>
+    </Style>
+
+    <!-- Form rows in the rule editor and dialogs. -->
+    <Style Selector="TextBlock.fieldLabel">
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextMutedBrush}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeSm}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,6,0,0"/>
+    </Style>
+
+    <Style Selector="TextBlock.fieldHint">
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextFaintBrush}"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeXs}"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+    </Style>
+
+    <Style Selector="Border.groupHeader">
+        <Setter Property="Background" Value="{DynamicResource SpySurfaceRaisedBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource SpyBorderBrush}"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+        <Setter Property="Padding" Value="10,6"/>
+    </Style>
+</Styles>

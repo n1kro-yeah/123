@@ -52,8 +52,66 @@ public sealed class HttpSession
     public byte[] ResponseBody { get; set; } = Array.Empty<byte>();
 
     // ---- Streaming -----------------------------------------------------------
-    public List<WebSocketFrame> WebSocketFrames { get; } = new();
-    public List<ServerSentEvent> ServerSentEvents { get; } = new();
+    // These are appended to from proxy worker threads while the UI enumerates
+    // them, so every mutation and every read goes through the lock below.
+    private readonly object _streamGate = new();
+    private readonly List<WebSocketFrame> _webSocketFrames = new();
+    private readonly List<ServerSentEvent> _serverSentEvents = new();
+
+    /// <summary>Snapshot of the captured WebSocket frames (safe to enumerate).</summary>
+    public IReadOnlyList<WebSocketFrame> WebSocketFrames
+    {
+        get { lock (_streamGate) return _webSocketFrames.ToArray(); }
+    }
+
+    /// <summary>Snapshot of the captured Server-Sent Events (safe to enumerate).</summary>
+    public IReadOnlyList<ServerSentEvent> ServerSentEvents
+    {
+        get { lock (_streamGate) return _serverSentEvents.ToArray(); }
+    }
+
+    public int WebSocketFrameCount { get { lock (_streamGate) return _webSocketFrames.Count; } }
+    public int ServerSentEventCount { get { lock (_streamGate) return _serverSentEvents.Count; } }
+
+    /// <summary>
+    /// Appends a WebSocket frame, keeping at most <paramref name="cap"/> of them
+    /// (0 = unlimited). Older frames are dropped first so a long-running socket
+    /// cannot grow without bound.
+    /// </summary>
+    public void AddWebSocketFrame(WebSocketFrame frame, int cap = 0)
+    {
+        lock (_streamGate)
+        {
+            _webSocketFrames.Add(frame);
+            if (cap > 0 && _webSocketFrames.Count > cap)
+            {
+                _webSocketFrames.RemoveRange(0, _webSocketFrames.Count - cap);
+                DroppedWebSocketFrames++;
+            }
+        }
+    }
+
+    /// <summary>Appends an SSE record, keeping at most <paramref name="cap"/> (0 = unlimited).</summary>
+    public void AddServerSentEvent(ServerSentEvent evt, int cap = 0)
+    {
+        lock (_streamGate)
+        {
+            _serverSentEvents.Add(evt);
+            if (cap > 0 && _serverSentEvents.Count > cap)
+            {
+                _serverSentEvents.RemoveRange(0, _serverSentEvents.Count - cap);
+                DroppedServerSentEvents++;
+            }
+        }
+    }
+
+    /// <summary>How many old frames/events were discarded to honour the retention cap.</summary>
+    public long DroppedWebSocketFrames { get; private set; }
+    public long DroppedServerSentEvents { get; private set; }
+
+    /// <summary>True when the captured body is only a prefix of what crossed the wire.</summary>
+    public bool RequestBodyTruncated { get; set; }
+    public bool ResponseBodyTruncated { get; set; }
 
     // ---- Bookkeeping ---------------------------------------------------------
     public SessionState State { get; set; } = SessionState.Pending;
@@ -122,8 +180,41 @@ public sealed class HttpSession
     public BodyContentType RequestBodyKind =>
         BodyClassifier.Classify(RequestHeaders["Content-Type"] ?? string.Empty, RequestBody);
 
-    public string RequestBodyText => SafeDecode(RequestBody);
-    public string ResponseBodyText => SafeDecode(ResponseBody);
+    // Decoding a multi-megabyte body allocates a string just as large, and the UI
+    // touches these properties from filters, search and every inspector tab. Cache
+    // the result and invalidate it when the underlying bytes change.
+    private byte[]? _requestTextSource;
+    private string? _requestText;
+    private byte[]? _responseTextSource;
+    private string? _responseText;
+
+    public string RequestBodyText
+    {
+        get
+        {
+            var body = RequestBody;
+            if (!ReferenceEquals(_requestTextSource, body))
+            {
+                _requestText = SafeDecode(body, RequestHeaders["Content-Type"]);
+                _requestTextSource = body;
+            }
+            return _requestText!;
+        }
+    }
+
+    public string ResponseBodyText
+    {
+        get
+        {
+            var body = ResponseBody;
+            if (!ReferenceEquals(_responseTextSource, body))
+            {
+                _responseText = SafeDecode(body, ContentType);
+                _responseTextSource = body;
+            }
+            return _responseText!;
+        }
+    }
 
     /// <summary>Parsed query parameters (name → value), order preserved.</summary>
     public IEnumerable<KeyValuePair<string, string>> QueryParameters() =>
@@ -144,10 +235,48 @@ public sealed class HttpSession
     /// <summary>Cookies set by the server (from Set-Cookie headers).</summary>
     public IEnumerable<string> ResponseSetCookies() => ResponseHeaders.GetAll("Set-Cookie");
 
-    private string SafeDecode(byte[] data)
+    /// <summary>
+    /// Decodes a body to text using the charset advertised in its Content-Type,
+    /// falling back to UTF-8. Undecodable bytes become U+FFFD rather than throwing,
+    /// so a binary payload still renders something usable in the viewers.
+    /// </summary>
+    private static string SafeDecode(byte[] data, string? contentType)
     {
         if (data.Length == 0) return string.Empty;
-        try { return Encoding.UTF8.GetString(data); }
-        catch { return Convert.ToHexString(data); }
+        var encoding = ResolveEncoding(contentType);
+        try { return encoding.GetString(data); }
+        catch
+        {
+            try { return Encoding.UTF8.GetString(data); }
+            catch { return Convert.ToHexString(data); }
+        }
     }
+
+    /// <summary>Resolves the <c>charset=</c> parameter of a Content-Type header.</summary>
+    internal static Encoding ResolveEncoding(string? contentType)
+    {
+        // Replacement-fallback decoders never throw on malformed input.
+        if (string.IsNullOrEmpty(contentType)) return Utf8Lenient;
+
+        int idx = contentType.IndexOf("charset=", StringComparison.OrdinalIgnoreCase);
+        if (idx < 0) return Utf8Lenient;
+
+        var charset = contentType[(idx + "charset=".Length)..].Trim().Trim('"', '\'');
+        int end = charset.IndexOfAny(new[] { ';', ' ', '\t' });
+        if (end >= 0) charset = charset[..end];
+        if (charset.Length == 0) return Utf8Lenient;
+
+        try
+        {
+            return Encoding.GetEncoding(charset, EncoderFallback.ReplacementFallback,
+                DecoderFallback.ReplacementFallback);
+        }
+        catch (ArgumentException)
+        {
+            return Utf8Lenient; // unknown/unsupported charset label
+        }
+    }
+
+    private static readonly Encoding Utf8Lenient =
+        Encoding.GetEncoding("utf-8", EncoderFallback.ReplacementFallback, DecoderFallback.ReplacementFallback);
 }

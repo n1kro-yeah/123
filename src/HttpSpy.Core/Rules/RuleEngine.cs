@@ -65,7 +65,7 @@ public sealed class RuleEngine
         foreach (var rule in Snapshot())
         {
             if (!rule.Matches(session.Method, session.FullUrl, 0)) continue;
-            rule.HitCount++;
+            rule.RecordHit(); // atomic: many connections evaluate rules concurrently
             switch (rule.Action)
             {
                 case RuleAction.Block:
@@ -91,24 +91,7 @@ public sealed class RuleEngine
                     };
                     return decision;
                 case RuleAction.MapLocal:
-                    if (!string.IsNullOrEmpty(rule.MapLocalPath) && File.Exists(rule.MapLocalPath))
-                    {
-                        decision.AutoReply = new AutoReply
-                        {
-                            Status = 200,
-                            Reason = "OK",
-                            ContentType = MimeForExtension(Path.GetExtension(rule.MapLocalPath)),
-                            Body = File.ReadAllBytes(rule.MapLocalPath)
-                        };
-                    }
-                    else
-                    {
-                        decision.AutoReply = new AutoReply
-                        {
-                            Status = 404, Reason = "Not Found", ContentType = "text/plain",
-                            Body = Encoding.UTF8.GetBytes($"Map Local file not found: {rule.MapLocalPath}")
-                        };
-                    }
+                    decision.AutoReply = ReadMappedFile(rule.MapLocalPath);
                     return decision;
                 case RuleAction.RedirectEndpoint:
                     if (!string.IsNullOrEmpty(rule.RedirectHost))
@@ -150,6 +133,12 @@ public sealed class RuleEngine
         foreach (var rule in Snapshot())
         {
             if (!rule.Matches(session.Method, session.FullUrl, session.StatusCode)) continue;
+
+            // Response-only actions never reach EvaluateRequest's counter, so their
+            // hit count stayed at zero and the rule looked dead in the editor.
+            if (rule.Action is RuleAction.ModifyResponse or RuleAction.Highlight)
+                rule.RecordHit();
+
             switch (rule.Action)
             {
                 case RuleAction.ModifyResponse:
@@ -185,6 +174,45 @@ public sealed class RuleEngine
         }
         return changed;
     }
+
+    /// <summary>
+    /// Serves a local file as a canned response for a Map Local rule. Every
+    /// failure mode (missing path, locked file, permission denied) becomes an
+    /// HTTP error rather than an exception — this runs on the proxy's request
+    /// path, where a throw would abort an unrelated client connection.
+    /// </summary>
+    private static AutoReply ReadMappedFile(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return TextReply(500, "Map Local Misconfigured", "Map Local rule has no file path configured.");
+
+        try
+        {
+            if (!File.Exists(path))
+                return TextReply(404, "Not Found", $"Map Local file not found: {path}");
+
+            return new AutoReply
+            {
+                Status = 200,
+                Reason = "OK",
+                ContentType = MimeForExtension(Path.GetExtension(path)),
+                Body = File.ReadAllBytes(path),
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException
+                                       or System.Security.SecurityException)
+        {
+            return TextReply(500, "Map Local Failed", $"Could not read {path}: {ex.Message}");
+        }
+    }
+
+    private static AutoReply TextReply(int status, string reason, string message) => new()
+    {
+        Status = status,
+        Reason = reason,
+        ContentType = "text/plain; charset=utf-8",
+        Body = Encoding.UTF8.GetBytes(message),
+    };
 
     private static string MimeForExtension(string ext) => ext.ToLowerInvariant() switch
     {

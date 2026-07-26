@@ -37,9 +37,15 @@ and can be developed and demoed on Linux/macOS.
   (GPRS / 2G / 3G / DSL / Wi-Fi) in the Options dialog.
 - **Dashboard:** status-code distribution, top hosts, content types and method
   breakdown, plus totals (requests, bytes, average time, errors, HTTPS count).
-- **Code generation** from any session: cURL, C#, Python, JavaScript.
+- **Traffic analysis:** a one-click audit of the whole capture — 40+ checks
+  across security, privacy, performance, caching, correctness, compatibility
+  and API design — with a 0–100 health score, per-category scores, deduplicated
+  findings, the evidence that triggered each one, and the fix. See below.
+- **Code generation** from any session: cURL, C#, Python, JavaScript,
+  PowerShell and `.http` (VS Code REST Client / JetBrains HTTP client).
 - **Export / persistence:** HAR 1.2, CSV (Excel), and a compressed `.hspy`
-  session file (save/restore full captures including bodies).
+  session file (save/restore full captures including bodies, per-phase timings,
+  WebSocket frames and SSE events).
 
 ### Pro-level workflow features
 
@@ -56,8 +62,15 @@ and can be developed and demoed on Linux/macOS.
   it in a side-by-side line diff (removed lines tinted red, added green).
 - **Context menu** on the grid: resend in Submitter, copy URL / cURL, copy or
   save the response body, bookmark, mark/compare, delete.
-- **Auto-scroll** to follow live capture, **dark / light theme toggle**, and an
+- **Colour-coded grid** — status-class pills (2xx/3xx/4xx/5xx), row tinting from
+  highlight rules, bookmark markers, and per-row flags for replayed, truncated
+  and annotated transactions.
+- **Auto-scroll** to follow live capture, **dark / light theme toggle** (both
+  built from the same design tokens, so neither is an afterthought), and an
   **upstream proxy + TLS-passthrough host** configuration.
+- **Bounded by design** — capped buffered bodies, a session retention limit that
+  never evicts bookmarked or selected rows, capped WebSocket/SSE retention, and
+  a coalesced grid refresh, so a long unattended capture stays responsive.
 - **Persistent settings & rules** — all options, the theme and the rule list are
   saved to `%APPDATA%\HttpSpy\` (`settings.json` + `rules.json`) and restored on
   the next launch.
@@ -92,6 +105,33 @@ and can be developed and demoed on Linux/macOS.
   with a one-click "move result to input" for chaining (Tools → Converter).
 - **Export formats** — HAR 1.2, CSV, **JSON**, **XML**, **TXT**, and
   **save each session to a separate raw file** (File menu).
+
+### Traffic analysis
+
+Press **Ctrl+Shift+A** (or open the **Analysis** tab and click *Analyse capture*)
+to run every captured transaction through a rule engine that reports what is
+actually wrong with the traffic, not just what it contained.
+
+Each finding carries a severity, the subject it applies to, what was observed,
+the literal header/body excerpt that triggered it (with credentials redacted),
+and the concrete change that fixes it. Identical findings across many requests
+are merged into one entry with an occurrence count, so a systemic problem
+reports once instead of four hundred times.
+
+| Category | Examples of what is checked |
+|---|---|
+| **Security** | Credentials over plaintext HTTP, Basic auth, missing HSTS / CSP / `nosniff` / frame protection, permissive or reflected CORS with credentials, cookies missing `Secure`/`HttpOnly`/`SameSite`, version banners, directory listings, stack traces in responses, mixed content, hosts reachable over both HTTP and HTTPS |
+| **Privacy** | Tokens and API keys in query strings or URL userinfo, AWS/GitHub/Slack/Stripe/JWT/private-key material in response bodies, personal data in URLs, tokens leaking through cross-origin `Referer` |
+| **Performance** | Slow responses attributed to the dominant phase, uncompressed text the client could have accepted compressed, oversized payloads, legacy image formats, avoidable redirects, oversized cookie headers, duplicate requests, N+1 endpoint patterns |
+| **Caching** | Cacheable responses with no freshness information, static assets that expire immediately, authenticated responses marked publicly cacheable without a `Vary` |
+| **Correctness** | `Content-Length` disagreeing with the body, `Content-Type` contradicting the bytes (magic-number sniffing), malformed JSON, 5xx and meaningful 4xx responses, empty 200s, transport failures, endpoints failing consistently |
+| **Compatibility** | HTTP/1.0 origins, deprecated headers (`X-XSS-Protection`, `P3P`, `HPKP`, `Expect-CT`), text without a charset |
+| **API design** | Errors returned inside a 200 OK, unversioned API endpoints, non-standard status codes |
+
+The result is scored per category and overall, and can be exported as a
+self-contained **HTML** report, plain **text**, or **JSON** for CI pipelines.
+Every check is bounded and defensive — a capture is untrusted input, so no rule
+can throw, hang on a pathological regex, or block the UI thread.
 
 ### HTTP/2 & gRPC
 
@@ -131,12 +171,15 @@ and can be developed and demoed on Linux/macOS.
 HttpSpy.sln
 src/
   HttpSpy.Core/    # capture engine, models, rules, exporters (no UI, net8.0 library)
+    Analysis/          # traffic-analysis rule engine + report writers
     Proxy/Http2/       # HTTP/2 frame layer, HPACK (+ Huffman), h2 connection/origin client
     Proxy/Grpc/        # gRPC framing + schema-less protobuf wire decoder
     Proxy/Transparent/ # WinDivert interop + redirector, TLS SNI parser (transparent capture)
   HttpSpy.App/     # Avalonia desktop UI (WinExe, net8.0)
+    Styles/            # design tokens + control styles, dark and light
 tests/
-  HttpSpy.Tests/   # xUnit tests (HPACK RFC 7541 vectors, protobuf/gRPC, SNI) — 27 tests
+  HttpSpy.Tests/   # xUnit tests (HPACK RFC 7541 vectors, protobuf/gRPC, SNI,
+                   # wire/parsing regressions, traffic analyzer) — 138 tests
 ```
 
 `HttpSpy.Core` has no UI dependency and can be referenced from tests or other

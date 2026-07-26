@@ -19,6 +19,9 @@ public static class HarExporter
             {
                 ["version"] = "1.2",
                 ["creator"] = new JsonObject { ["name"] = "HttpSpy", ["version"] = "1.0" },
+                // Several HAR viewers (Chrome DevTools among them) expect the
+                // optional "pages" array to be present even when it is empty.
+                ["pages"] = new JsonArray(),
                 ["entries"] = entries
             }
         };
@@ -47,7 +50,7 @@ public static class HarExporter
 
     private static JsonObject RequestNode(HttpSession s)
     {
-        return new JsonObject
+        var node = new JsonObject
         {
             ["method"] = s.Method,
             ["url"] = s.FullUrl,
@@ -57,16 +60,41 @@ public static class HarExporter
             ["queryString"] = QueryArray(s.QueryParameters()),
             ["headersSize"] = -1,
             ["bodySize"] = s.RequestBodySize,
-            ["postData"] = s.RequestBody.Length > 0 ? new JsonObject
+        };
+
+        // HAR 1.2 has no encoding field on postData, so a binary request body can
+        // only be represented as (lossy) text. Emit the member only when there is
+        // something to say — a null postData trips up strict readers.
+        if (s.RequestBody.Length > 0)
+        {
+            node["postData"] = new JsonObject
             {
                 ["mimeType"] = s.RequestHeaders["Content-Type"] ?? "application/octet-stream",
-                ["text"] = s.RequestBodyText
-            } : null,
-        };
+                ["text"] = IsBinary(s.RequestBodyKind)
+                    ? Convert.ToBase64String(s.RequestBody)
+                    : s.RequestBodyText,
+                // Non-standard hint so round-tripping through HttpSpy stays lossless.
+                ["comment"] = IsBinary(s.RequestBodyKind) ? "base64" : null,
+            };
+        }
+        return node;
     }
 
     private static JsonObject ResponseNode(HttpSession s)
     {
+        bool binary = IsBinary(s.ResponseBodyKind);
+        var content = new JsonObject
+        {
+            ["size"] = s.ResponseBodySize,
+            ["mimeType"] = s.ResponseContentTypeShort,
+            // HAR 1.2 §content: "encoding" declares how "text" is armoured. Without
+            // it, image/font/binary payloads were being mangled by UTF-8 decoding.
+            ["text"] = binary ? Convert.ToBase64String(s.ResponseBody) : s.ResponseBodyText,
+        };
+        if (binary) content["encoding"] = "base64";
+        if (s.EncodedBodySize > 0 && s.EncodedBodySize < s.ResponseBodySize)
+            content["compression"] = s.ResponseBodySize - s.EncodedBodySize;
+
         return new JsonObject
         {
             ["status"] = s.StatusCode,
@@ -74,17 +102,15 @@ public static class HarExporter
             ["httpVersion"] = s.ResponseHttpVersion,
             ["cookies"] = SetCookieArray(s.ResponseSetCookies()),
             ["headers"] = HeadersArray(s.ResponseHeaders),
-            ["content"] = new JsonObject
-            {
-                ["size"] = s.ResponseBodySize,
-                ["mimeType"] = s.ResponseContentTypeShort,
-                ["text"] = s.ResponseBodyText,
-            },
+            ["content"] = content,
             ["redirectURL"] = s.ResponseHeaders["Location"] ?? "",
             ["headersSize"] = -1,
-            ["bodySize"] = s.ResponseBodySize,
+            ["bodySize"] = s.EncodedBodySize > 0 ? s.EncodedBodySize : s.ResponseBodySize,
         };
     }
+
+    private static bool IsBinary(BodyContentType kind) =>
+        kind is BodyContentType.Image or BodyContentType.Font or BodyContentType.Binary;
 
     private static JsonObject TimingsNode(SessionTimings t) => new()
     {

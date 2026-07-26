@@ -62,9 +62,25 @@ public sealed class ProxyEngine : IDisposable
     public void Start()
     {
         if (IsRunning) return;
-        _cts = new CancellationTokenSource();
-        _server = new ProxyServer(this);
-        _server.Start(_cts.Token);
+
+        var cts = new CancellationTokenSource();
+        var server = new ProxyServer(this);
+        try
+        {
+            server.Start(cts.Token);
+        }
+        catch
+        {
+            // Binding the listener failed (port in use, bad address, …). Leave the
+            // engine cleanly stopped instead of half-started with a leaked CTS.
+            try { server.Dispose(); } catch { /* ignore */ }
+            cts.Dispose();
+            throw;
+        }
+
+        _cts?.Dispose();
+        _cts = cts;
+        _server = server;
         IsRunning = true;
 
         if (Options.SetSystemProxy && OperatingSystem.IsWindows())
@@ -84,12 +100,29 @@ public sealed class ProxyEngine : IDisposable
         _server = null;
         IsRunning = false;
 
+        // Release anything still parked at a breakpoint; otherwise those proxy
+        // tasks (and the client sockets they hold) would never unwind.
+        ReleasePausedTransactions();
+
         if (Options.SetSystemProxy && OperatingSystem.IsWindows())
         {
             try { SystemProxy.Disable(); }
             catch (Exception ex) { RaiseLog($"Failed to clear system proxy: {ex.Message}"); }
         }
         RaiseLog("HttpSpy proxy stopped");
+    }
+
+    private void ReleasePausedTransactions()
+    {
+        PausedTransaction[] pending;
+        lock (_pausedGate)
+        {
+            if (_paused.Count == 0) return;
+            pending = _paused.ToArray();
+            _paused.Clear();
+        }
+        foreach (var p in pending) p.Resume();
+        RaiseLog($"Released {pending.Length} transaction(s) held at breakpoints.");
     }
 
     // ---- Internal raise helpers (called by ProxyServer) ----------------------
@@ -111,19 +144,40 @@ public sealed class ProxyEngine : IDisposable
 
     internal void RaiseLog(string message) => Log?.Invoke(message);
 
-    /// <summary>Raises a breakpoint and blocks (asynchronously) until the UI resumes.</summary>
+    /// <summary>
+    /// Raises a breakpoint and blocks (asynchronously) until the UI resumes, the
+    /// engine stops, or <see cref="ProxyOptions.BreakpointTimeoutMs"/> elapses.
+    /// </summary>
     internal async Task<PausedTransaction> RaiseBreakpointAsync(HttpSession session, BreakpointPhase phase)
     {
         var paused = new PausedTransaction(session, phase);
+        lock (_pausedGate) _paused.Add(paused);
+        paused.Resolved += p => { lock (_pausedGate) _paused.Remove(p); };
+
         TransactionPaused?.Invoke(paused);
-        await paused.WaitAsync().ConfigureAwait(false);
+        await paused.WaitAsync(Options.BreakpointTimeoutMs, _cts?.Token ?? CancellationToken.None)
+            .ConfigureAwait(false);
+
+        if (paused.TimedOut)
+            RaiseLog($"Breakpoint on {session.Method} {session.FullUrl} timed out and was released automatically.");
         return paused;
     }
+
+    /// <summary>Transactions currently held at a breakpoint (snapshot).</summary>
+    public IReadOnlyList<PausedTransaction> PausedTransactions
+    {
+        get { lock (_pausedGate) return _paused.ToArray(); }
+    }
+
+    private readonly object _pausedGate = new();
+    private readonly List<PausedTransaction> _paused = new();
 
     public void Dispose()
     {
         Stop();
+        ReleasePausedTransactions();
         CertificateAuthority.Dispose();
         _cts?.Dispose();
+        _cts = null;
     }
 }

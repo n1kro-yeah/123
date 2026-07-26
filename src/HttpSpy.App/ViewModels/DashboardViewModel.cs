@@ -14,7 +14,9 @@ public sealed class ChartItem
     {
         Label = label;
         Value = value;
-        BarWidth = 20 + fraction * 240;
+        // A zero-count bucket must render as nothing; the old formula's 20px floor
+        // drew a stub bar next to a "0", which read as a non-zero value.
+        BarWidth = value <= 0 ? 0 : 6 + fraction * 260;
         Brush = brush;
     }
 

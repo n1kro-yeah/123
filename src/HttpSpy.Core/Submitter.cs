@@ -11,12 +11,12 @@ namespace HttpSpy.Core;
 /// captures the response into a new <see cref="HttpSession"/>. Used both for the
 /// manual request builder and for replaying / editing captured sessions.
 /// </summary>
-public sealed class Submitter
+public sealed class Submitter : IDisposable
 {
     private readonly HttpClientHandler _handler;
     private readonly HttpClient _client;
 
-    public Submitter(bool ignoreCertErrors = true)
+    public Submitter(bool ignoreCertErrors = true, TimeSpan? timeout = null)
     {
         _handler = new HttpClientHandler
         {
@@ -26,7 +26,24 @@ public sealed class Submitter
         };
         if (ignoreCertErrors)
             _handler.ServerCertificateCustomValidationCallback = (_, _, _, _) => true;
-        _client = new HttpClient(_handler) { Timeout = TimeSpan.FromSeconds(100) };
+        _client = new HttpClient(_handler) { Timeout = timeout ?? TimeSpan.FromSeconds(100) };
+    }
+
+    /// <summary>
+    /// Headers the transport owns. Replaying a captured request would otherwise
+    /// carry the original <c>Content-Length</c> across to an edited body, and the
+    /// hop-by-hop headers are meaningless on a fresh connection.
+    /// </summary>
+    private static readonly HashSet<string> TransportOwnedHeaders = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Host", "Content-Length", "Connection", "Proxy-Connection", "Keep-Alive",
+        "Transfer-Encoding", "Upgrade", "TE", "Trailer",
+    };
+
+    public void Dispose()
+    {
+        _client.Dispose();
+        _handler.Dispose();
     }
 
     /// <summary>Builds a fresh request spec from an existing captured session.</summary>
@@ -60,14 +77,15 @@ public sealed class Submitter
             session.Kind = session.IsTls ? SessionKind.Https : SessionKind.Http;
 
             using var request = new HttpRequestMessage(new HttpMethod(spec.Method), uri);
+            if (Version.TryParse(spec.HttpVersion?.Replace("HTTP/", "", StringComparison.OrdinalIgnoreCase),
+                    out var version))
+            {
+                request.Version = version;
+                request.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
+            }
 
             byte[] bodyBytes = Encoding.UTF8.GetBytes(spec.Body ?? string.Empty);
-            string? contentType = null;
-            foreach (var h in spec.Headers)
-            {
-                session.RequestHeaders.Add(h.Name, h.Value);
-                if (h.Name.Equals("Content-Type", StringComparison.OrdinalIgnoreCase)) contentType = h.Value;
-            }
+            foreach (var h in spec.Headers) session.RequestHeaders.Add(h.Name, h.Value);
 
             if (bodyBytes.Length > 0 || HasBody(spec.Method))
             {
@@ -77,14 +95,14 @@ public sealed class Submitter
 
             foreach (var h in spec.Headers)
             {
+                // Content-Length in particular must not be copied: the body may
+                // have been edited since capture, and HttpClient computes it.
+                if (TransportOwnedHeaders.Contains(h.Name)) continue;
+
                 if (IsContentHeader(h.Name))
-                {
                     request.Content?.Headers.TryAddWithoutValidation(h.Name, h.Value);
-                }
-                else if (!h.Name.Equals("Host", StringComparison.OrdinalIgnoreCase))
-                {
+                else
                     request.Headers.TryAddWithoutValidation(h.Name, h.Value);
-                }
             }
 
             using var response = await _client.SendAsync(request, HttpCompletionOption.ResponseContentRead, ct)
@@ -100,6 +118,10 @@ public sealed class Submitter
 
             session.ResponseBody = await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
             session.BytesReceived = session.ResponseBody.Length;
+            // Rough but honest: request line + headers + body actually put on the wire.
+            session.BytesSent = bodyBytes.LongLength +
+                                session.RequestHeaders.Items.Sum(h => (long)h.Name.Length + h.Value.Length + 4) +
+                                spec.Method.Length + uri.PathAndQuery.Length + 12;
             session.State = SessionState.Completed;
         }
         catch (Exception ex)

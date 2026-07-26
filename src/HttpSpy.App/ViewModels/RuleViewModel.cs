@@ -14,6 +14,7 @@ public sealed class RuleViewModel : ObservableObject
     {
         Rule = rule;
         SyncModifierTextFromRule();
+        ValidatePattern();
     }
 
     public RuleViewModel() : this(new Rule()) { }
@@ -69,14 +70,32 @@ public sealed class RuleViewModel : ObservableObject
     public int MatchModeIndex
     {
         get => (int)Rule.UrlMatchMode;
-        set { Rule.UrlMatchMode = (MatchMode)value; OnPropertyChanged(); }
+        set { Rule.UrlMatchMode = (MatchMode)value; OnPropertyChanged(); ValidatePattern(); }
     }
 
     public string UrlPattern
     {
         get => Rule.UrlPattern;
-        set { Rule.UrlPattern = value; OnPropertyChanged(); }
+        set { Rule.UrlPattern = value; OnPropertyChanged(); ValidatePattern(); }
     }
+
+    private string? _patternError;
+
+    /// <summary>
+    /// The compile error for the current URL pattern, or null when it is valid.
+    /// Surfaced in the editor so a malformed regex is visible immediately instead
+    /// of silently matching nothing at capture time.
+    /// </summary>
+    public string? PatternError
+    {
+        get => _patternError;
+        private set => SetProperty(ref _patternError, value);
+    }
+
+    private void ValidatePattern() => PatternError = Rule.ValidatePattern();
+
+    /// <summary>The raw ARGB highlight colour, for the editor's colour swatch.</summary>
+    public uint HighlightColor => Rule.HighlightColor;
 
     public string? MethodFilter
     {
@@ -205,6 +224,7 @@ public sealed class RuleViewModel : ObservableObject
             {
                 Rule.HighlightColor = argb;
                 OnPropertyChanged();
+                OnPropertyChanged(nameof(HighlightColor));
             }
         }
     }

@@ -38,14 +38,35 @@ public sealed class ProxyOptions
     /// <summary>Local port the transparent-capture listener binds to (all interfaces).</summary>
     public int TransparentListenPort { get; set; } = 8889;
 
-    /// <summary>Maximum body size (bytes) buffered per message; larger bodies are streamed but truncated for display.</summary>
+    /// <summary>
+    /// Maximum body size (bytes) buffered per message. Anything beyond this is
+    /// still relayed to the peer byte-for-byte, but only the first
+    /// <see cref="MaxBufferedBody"/> bytes are retained for inspection — this is
+    /// what keeps a multi-gigabyte download from exhausting the process heap.
+    /// </summary>
     public long MaxBufferedBody { get; set; } = 32 * 1024 * 1024;
+
+    /// <summary>Maximum WebSocket frame payload retained per frame (bytes).</summary>
+    public long MaxWebSocketFrame { get; set; } = 4 * 1024 * 1024;
+
+    /// <summary>Maximum number of WebSocket frames retained per session (0 = unlimited).</summary>
+    public int MaxWebSocketFrames { get; set; } = 5000;
+
+    /// <summary>Maximum number of Server-Sent Events retained per session (0 = unlimited).</summary>
+    public int MaxServerSentEvents { get; set; } = 5000;
 
     /// <summary>Upstream proxy to chain through (optional).</summary>
     public string? UpstreamProxyHost { get; set; }
     public int UpstreamProxyPort { get; set; }
 
     public int ConnectTimeoutMs { get; set; } = 15000;
+
+    /// <summary>
+    /// How long a transaction may stay paused at a breakpoint before it is
+    /// released automatically. Prevents a forgotten breakpoint from wedging a
+    /// client connection forever. 0 disables the timeout.
+    /// </summary>
+    public int BreakpointTimeoutMs { get; set; } = 300_000;
 
     // ---- Network simulation (throttling) ------------------------------------
     /// <summary>When true, responses to the client are rate-limited / delayed to simulate slow links.</summary>

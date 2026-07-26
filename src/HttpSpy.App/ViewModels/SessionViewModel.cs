@@ -31,6 +31,49 @@ public sealed class SessionViewModel : ObservableObject
     public bool IsError => Model.IsError;
     public string? Comment => Model.Comment;
 
+    /// <summary>
+    /// Status code alone, for the coloured pill. The reason phrase is shown
+    /// separately so the pill stays a fixed, scannable width.
+    /// </summary>
+    public string StatusCodeText => StatusCode > 0 ? StatusCode.ToString() : Model.Error is null ? "…" : "ERR";
+
+    /// <summary>Bookmark marker rendered in its own narrow column.</summary>
+    public string BookmarkGlyph => Bookmarked ? "★" : string.Empty;
+
+    /// <summary>Marks bodies that were capped by the buffered-body limit.</summary>
+    public bool IsTruncated => Model.RequestBodyTruncated || Model.ResponseBodyTruncated;
+
+    /// <summary>Compact per-row annotations: truncation, replay, comment.</summary>
+    public string Flags
+    {
+        get
+        {
+            var flags = string.Empty;
+            if (Model.IsReplay) flags += "↻";
+            if (IsTruncated) flags += "✂";
+            if (!string.IsNullOrEmpty(Model.Comment)) flags += "💬";
+            return flags;
+        }
+    }
+
+    /// <summary>Tooltip text for the row, assembled once per refresh.</summary>
+    public string RowTooltip
+    {
+        get
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append(Method).Append(' ').AppendLine(Url);
+            if (StatusCode > 0) sb.Append("Status: ").AppendLine(StatusDisplay);
+            if (Model.Error is not null) sb.Append("Error: ").AppendLine(Model.Error);
+            sb.Append("Started: ").AppendLine(StartTime);
+            if (!string.IsNullOrEmpty(ProcessName))
+                sb.Append("Process: ").Append(ProcessName).Append(" (").Append(ProcessId).AppendLine(")");
+            if (IsTruncated) sb.AppendLine("Body was truncated at the buffered-body limit.");
+            if (!string.IsNullOrEmpty(Comment)) sb.Append("Note: ").AppendLine(Comment);
+            return sb.ToString().TrimEnd();
+        }
+    }
+
     public string SchemeGlyph => Kind switch
     {
         SessionKind.WebSocket => "WS",
@@ -45,6 +88,7 @@ public sealed class SessionViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(StatusCode));
         OnPropertyChanged(nameof(StatusDisplay));
+        OnPropertyChanged(nameof(StatusCodeText));
         OnPropertyChanged(nameof(ContentType));
         OnPropertyChanged(nameof(Size));
         OnPropertyChanged(nameof(DurationMs));
@@ -52,6 +96,10 @@ public sealed class SessionViewModel : ObservableObject
         OnPropertyChanged(nameof(SchemeGlyph));
         OnPropertyChanged(nameof(HighlightColor));
         OnPropertyChanged(nameof(Bookmarked));
+        OnPropertyChanged(nameof(BookmarkGlyph));
+        OnPropertyChanged(nameof(Flags));
+        OnPropertyChanged(nameof(IsTruncated));
+        OnPropertyChanged(nameof(RowTooltip));
         OnPropertyChanged(nameof(Error));
         OnPropertyChanged(nameof(IsError));
         OnPropertyChanged(nameof(Comment));
