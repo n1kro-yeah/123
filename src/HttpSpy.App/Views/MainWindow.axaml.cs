@@ -73,6 +73,7 @@ public partial class MainWindow : Window, IDialogService
             _vm.RegexTesterRequested -= OnRegexTesterRequested;
             _vm.SearchRequested -= OnSearchRequested;
             _vm.ColumnVisibilityChanged -= ApplyColumnVisibility;
+            _vm.ColumnLayoutResetRequested -= ResetColumnLayout;
             _vm.LogLines.CollectionChanged -= OnLogLinesChanged;
         }
         _vm = DataContext as MainWindowViewModel;
@@ -88,7 +89,9 @@ public partial class MainWindow : Window, IDialogService
             _vm.RegexTesterRequested += OnRegexTesterRequested;
             _vm.SearchRequested += OnSearchRequested;
             _vm.ColumnVisibilityChanged += ApplyColumnVisibility;
+            _vm.ColumnLayoutResetRequested += ResetColumnLayout;
             ApplyColumnVisibility();
+            ApplyColumnLayout();
 
             // Ask about a crashed session once the window can actually show a
             // dialog — the view model is constructed long before that.
@@ -104,8 +107,77 @@ public partial class MainWindow : Window, IDialogService
     /// </summary>
     protected override void OnClosed(EventArgs e)
     {
+        SaveColumnLayout();
         _vm?.ShutdownCleanly();
         base.OnClosed(e);
+    }
+
+    // ---- Column layout -------------------------------------------------------
+    //
+    // Visibility was already persisted, but order and width were not: drag a
+    // column somewhere useful, restart, and it was back where it started. That
+    // is the kind of forgetfulness that makes an application feel unfinished.
+
+    /// <summary>Default order and widths, captured before any saved layout is applied.</summary>
+    private int[]? _defaultOrder;
+    private DataGridLength[]? _defaultWidths;
+
+    private void ApplyColumnLayout()
+    {
+        var grid = this.FindControl<DataGrid>("SessionGrid");
+        if (grid is null || _vm is null) return;
+
+        // Declared widths, not measured ones: layout has not run yet at this
+        // point, so ActualWidth would record every default as zero.
+        _defaultOrder ??= grid.Columns.Select(c => c.DisplayIndex).ToArray();
+        _defaultWidths ??= grid.Columns.Select(c => c.Width).ToArray();
+
+        var saved = new Dictionary<string, (int Index, double Width)>(StringComparer.Ordinal);
+        foreach (var entry in _vm.SavedColumnLayout)
+        {
+            var parts = entry.Split('|');
+            if (parts.Length != 3) continue;
+            if (!int.TryParse(parts[1], out int index)) continue;
+            if (!double.TryParse(parts[2], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out double width)) continue;
+            saved[parts[0]] = (index, width);
+        }
+        if (saved.Count == 0) return;
+
+        foreach (var column in grid.Columns)
+        {
+            if (column.Tag is not string tag || !saved.TryGetValue(tag, out var layout)) continue;
+            // A stale layout from an older build can carry an index past the end
+            // of today's column set; clamping beats throwing during startup.
+            column.DisplayIndex = Math.Clamp(layout.Index, 0, grid.Columns.Count - 1);
+            if (layout.Width > 20) column.Width = new DataGridLength(layout.Width);
+        }
+    }
+
+    private void SaveColumnLayout()
+    {
+        var grid = this.FindControl<DataGrid>("SessionGrid");
+        if (grid is null || _vm is null) return;
+
+        var entries = grid.Columns
+            .Where(c => c.Tag is string)
+            .Select(c => string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"{(string)c.Tag!}|{c.DisplayIndex}|{c.ActualWidth:0}"))
+            .ToList();
+
+        try { _vm.CaptureColumnLayout(entries); } catch { /* never block shutdown */ }
+    }
+
+    private void ResetColumnLayout()
+    {
+        var grid = this.FindControl<DataGrid>("SessionGrid");
+        if (grid is null || _defaultOrder is null || _defaultWidths is null) return;
+
+        for (int i = 0; i < grid.Columns.Count; i++)
+        {
+            grid.Columns[i].DisplayIndex = _defaultOrder[i];
+            grid.Columns[i].Width = _defaultWidths[i];
+        }
     }
 
     /// <summary>Shows/hides the optional grid columns per the view model flags.</summary>

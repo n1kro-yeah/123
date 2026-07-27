@@ -461,6 +461,29 @@
         <Setter Property="IsVisible" Value="False"/>
     </Style>
 
+    <!-- Numeric cells: right-aligned and monospaced, so 559 B / 6.5 KB and
+         84 ms / 405 ms line up digit-for-digit instead of drifting. Reading a
+         column of sizes is the whole point of having the column. -->
+    <Style Selector="DataGridCell.num TextBlock">
+        <Setter Property="TextAlignment" Value="Right"/>
+        <Setter Property="FontFamily" Value="{StaticResource SpyMonoFont}"/>
+    </Style>
+
+    <!-- Compact density: a debugging session lives in this grid, and fitting a
+         third more rows on screen is a feature, not decoration. -->
+    <Style Selector="DataGrid.compact DataGridRow">
+        <Setter Property="MinHeight" Value="21"/>
+    </Style>
+
+    <Style Selector="DataGrid.compact DataGridCell">
+        <Setter Property="Padding" Value="8,0"/>
+        <Setter Property="FontSize" Value="{DynamicResource SpyFontSizeXs}"/>
+    </Style>
+
+    <Style Selector="DataGrid.compact DataGridColumnHeader">
+        <Setter Property="Padding" Value="8,2"/>
+    </Style>
+
     <!-- Lists / trees  -->
     <Style Selector="ListBox">
         <Setter Property="Background" Value="Transparent"/>
@@ -615,6 +638,31 @@
     <Style Selector="StackPanel.empty-state > TextBlock.glyph">
         <Setter Property="FontSize" Value="44"/>
         <Setter Property="Opacity" Value="0.45"/>
+    </Style>
+
+    <!-- Keyboard focus.
+
+         Tabbing through the interface previously moved an invisible focus: the
+         Fluent adorner is a dotted hairline that disappears against these
+         surfaces. An accent outline is what makes keyboard navigation usable at
+         all, and it only appears for keyboard focus, so mouse users never see it. -->
+    <Style Selector=":is(Control):focus-visible">
+        <Setter Property="FocusAdorner">
+            <FocusAdornerTemplate>
+                <Border BorderBrush="{DynamicResource SpyAccentBrush}"
+                        BorderThickness="2"
+                        CornerRadius="{DynamicResource SpyRadiusSm}"
+                        Margin="-2"/>
+            </FocusAdornerTemplate>
+        </Setter>
+    </Style>
+
+    <Style Selector="StackPanel.empty-state > PathIcon.glyph">
+        <Setter Property="Width" Value="42"/>
+        <Setter Property="Height" Value="42"/>
+        <Setter Property="Opacity" Value="0.4"/>
+        <Setter Property="Foreground" Value="{DynamicResource SpyTextMutedBrush}"/>
+        <Setter Property="Margin" Value="0,0,0,6"/>
     </Style>
 
     <Style Selector="StackPanel.empty-state > TextBlock.title">

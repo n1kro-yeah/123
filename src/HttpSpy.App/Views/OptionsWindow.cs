@@ -31,6 +31,21 @@ public sealed class OptionsWindow : Window
         var kbps = new NumericUpDown { Value = vm.ThrottleKbps, Minimum = 0, Maximum = 1_000_000, Increment = 50, FormatString = "0" };
         var latency = new NumericUpDown { Value = vm.ExtraLatencyMs, Minimum = 0, Maximum = 60_000, Increment = 25, FormatString = "0" };
         var upstream = new TextBox { Text = vm.UpstreamProxy, Watermark = "host:port (leave empty for direct)" };
+        var proxyUser = new TextBox { Text = vm.UpstreamProxyUser, Watermark = "user (leave empty if the proxy is open)" };
+        var proxyPassword = new TextBox
+        {
+            Text = vm.UpstreamProxyPassword,
+            PasswordChar = '•',
+            Watermark = "password",
+        };
+        var clientCerts = new TextBox
+        {
+            Text = vm.ClientCertificates,
+            AcceptsReturn = true,
+            Height = 80,
+            Watermark = "api.example.com = /path/client.pfx ; password    (one per line, host optional)",
+            FontFamily = new FontFamily("Cascadia Mono,Consolas,monospace"),
+        };
         var passthrough = new TextBox
         {
             Text = vm.PassthroughHosts,
@@ -87,6 +102,9 @@ public sealed class OptionsWindow : Window
             vm.ThrottleKbps = (int)(kbps.Value ?? 0);
             vm.ExtraLatencyMs = (int)(latency.Value ?? 0);
             vm.UpstreamProxy = upstream.Text ?? "";
+            vm.UpstreamProxyUser = proxyUser.Text ?? "";
+            vm.UpstreamProxyPassword = proxyPassword.Text ?? "";
+            vm.ClientCertificates = clientCerts.Text ?? "";
             vm.PassthroughHosts = passthrough.Text ?? "";
             vm.ApplyOptions();
             Close();
@@ -132,6 +150,29 @@ public sealed class OptionsWindow : Window
                 new Separator(),
                 new TextBlock { Text = "Connection", FontWeight = FontWeight.Bold, FontSize = 15 },
                 Labeled("Upstream proxy", upstream),
+                Labeled("Proxy user", proxyUser),
+                Labeled("Proxy password", proxyPassword),
+                new TextBlock
+                {
+                    Text = "Only Basic authentication is attempted; NTLM and Negotiate need a handshake a " +
+                           "debugging proxy has no business impersonating. Credentials are stored in " +
+                           "settings.json, owner-readable only.",
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                    FontSize = 11,
+                    Opacity = 0.7,
+                },
+                new Separator(),
+                new TextBlock { Text = "Client certificates (mutual TLS)", FontWeight = FontWeight.Bold, FontSize = 15 },
+                clientCerts,
+                new TextBlock
+                {
+                    Text = "Presented to origins that request one. PKCS#12 (.pfx/.p12) or PEM; the first " +
+                           "matching line wins, so list specific hosts above a catch-all.",
+                    TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                    FontSize = 11,
+                    Opacity = 0.7,
+                },
+                new Separator(),
                 new TextBlock { Text = "TLS passthrough hosts" },
                 passthrough,
                 buttons,

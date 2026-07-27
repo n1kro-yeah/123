@@ -50,6 +50,10 @@ public class LocalizationTests : IDisposable
         var sameInBoth = new HashSet<string>
         {
             "Toolbar.More", "Column.Url", "Column.Index", "Menu.Https",
+            // Protocol and format names, an example URL, and "#" — translating
+            // these would be wrong, not thorough.
+            "Insp.Hex", "Insp.Json", "Insp.WebSocket", "Insp.Sse", "Insp.Grpc",
+            "Insp.Id", "Insp.Index", "Dash.Https", "Sub.UrlPlaceholder",
         };
 
         var untranslated = Loc.RussianCatalogue

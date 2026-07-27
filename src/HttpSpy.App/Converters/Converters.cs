@@ -25,6 +25,12 @@ internal static class Palette
     public static readonly IBrush Informational = Freeze(0x39, 0xA0, 0xC5);
     public static readonly IBrush Neutral = Freeze(0x8B, 0x94, 0x9E);
 
+    /// <summary>
+    /// The brief tint a row wears when it first arrives. Kept fainter than any
+    /// highlight rule: it is a hint that something landed, not a classification.
+    /// </summary>
+    public static readonly IBrush ArrivalTint = Freeze(0x3B, 0x82, 0xF6, 0x24);
+
     public static readonly IBrush SuccessSoft = Freeze(0x2E, 0xA0, 0x43, 0x28);
     public static readonly IBrush RedirectSoft = Freeze(0x8B, 0x5C, 0xF6, 0x28);
     public static readonly IBrush ClientErrorSoft = Freeze(0xE1, 0x6F, 0x24, 0x2E);
@@ -358,6 +364,21 @@ public sealed class QuickFilterLabelConverter : IValueConverter
         ["All hosts"] = "Filter.AllHosts",
         ["All processes"] = "Filter.AllProcesses",
         ["All"] = "Filter.All",
+
+        // The analysis tab's severity and category pickers are the same shape:
+        // the bound value is the sentinel the filter compares against.
+        ["Critical"] = "Sev.Critical",
+        ["High"] = "Sev.High",
+        ["Medium"] = "Sev.Medium",
+        ["Low"] = "Sev.Low",
+        ["Info"] = "Sev.Info",
+        ["Security"] = "Cat.Security",
+        ["Privacy"] = "Cat.Privacy",
+        ["Performance"] = "Cat.Performance",
+        ["Caching"] = "Cat.Caching",
+        ["Correctness"] = "Cat.Correctness",
+        ["Compatibility"] = "Cat.Compatibility",
+        ["ApiDesign"] = "Cat.ApiDesign",
     };
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)

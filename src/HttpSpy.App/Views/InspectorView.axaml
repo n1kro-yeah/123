@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:l="using:HttpSpy.App.Localization"
              xmlns:ctl="using:HttpSpy.App.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -10,42 +11,42 @@
 
     <TabControl>
         <!-- ===== REQUEST ===== -->
-        <TabItem Header="Request">
+        <TabItem Header="{l:T Insp.Request}">
             <TabControl>
-                <TabItem Header="Headers">
+                <TabItem Header="{l:T Insp.Headers}">
                     <DataGrid ItemsSource="{Binding RequestHeaders}" IsReadOnly="True" FontSize="12"
                               GridLinesVisibility="All">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="260"/>
-                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                            <DataGridTextColumn Header="{l:T Insp.Name}" Binding="{Binding Name}" Width="260"/>
+                            <DataGridTextColumn Header="{l:T Insp.Value}" Binding="{Binding Value}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
-                <TabItem Header="Query">
+                <TabItem Header="{l:T Insp.Query}">
                     <DataGrid ItemsSource="{Binding QueryParameters}" IsReadOnly="True" FontSize="12" GridLinesVisibility="All">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="260"/>
-                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                            <DataGridTextColumn Header="{l:T Insp.Name}" Binding="{Binding Name}" Width="260"/>
+                            <DataGridTextColumn Header="{l:T Insp.Value}" Binding="{Binding Value}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
-                <TabItem Header="Cookies">
+                <TabItem Header="{l:T Insp.Cookies}">
                     <DataGrid ItemsSource="{Binding RequestCookies}" IsReadOnly="True" FontSize="12" GridLinesVisibility="All">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="260"/>
-                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                            <DataGridTextColumn Header="{l:T Insp.Name}" Binding="{Binding Name}" Width="260"/>
+                            <DataGridTextColumn Header="{l:T Insp.Value}" Binding="{Binding Value}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
-                <TabItem Header="Form">
+                <TabItem Header="{l:T Insp.Form}">
                     <DataGrid ItemsSource="{Binding FormFields}" IsReadOnly="True" FontSize="12" GridLinesVisibility="All">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Field" Binding="{Binding Name}" Width="260"/>
-                            <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                            <DataGridTextColumn Header="{l:T Insp.Field}" Binding="{Binding Name}" Width="260"/>
+                            <DataGridTextColumn Header="{l:T Insp.Value}" Binding="{Binding Value}" Width="*"/>
                         </DataGrid.Columns>
                     </DataGrid>
                 </TabItem>
-                <TabItem Header="Body">
+                <TabItem Header="{l:T Insp.Body}">
                     <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="6">
                         <SelectableTextBlock ctl:HighlightBehavior.SourceText="{Binding RequestBodyText}"
                                              ctl:HighlightBehavior.Language="{Binding RequestBodyLanguage}"
@@ -53,11 +54,11 @@
                                              TextWrapping="NoWrap"/>
                     </ScrollViewer>
                 </TabItem>
-                <TabItem Header="Raw">
+                <TabItem Header="{l:T Insp.Raw}">
                     <TextBox Text="{Binding RequestRaw, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
                              TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
                 </TabItem>
-                <TabItem Header="Hex">
+                <TabItem Header="{l:T Insp.Hex}">
                     <TextBox Text="{Binding RequestHex, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
                              TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
                 </TabItem>
@@ -65,36 +66,36 @@
         </TabItem>
 
         <!-- ===== RESPONSE ===== -->
-        <TabItem Header="Response">
+        <TabItem Header="{l:T Insp.Response}">
             <DockPanel>
                 <TextBlock DockPanel.Dock="Top" Text="{Binding StatusLine}" FontWeight="Bold" Margin="4"
                            FontFamily="Cascadia Mono,Consolas,monospace"/>
                 <TabControl>
-                    <TabItem Header="Headers">
+                    <TabItem Header="{l:T Insp.Headers}">
                         <DataGrid ItemsSource="{Binding ResponseHeaders}" IsReadOnly="True" FontSize="12" GridLinesVisibility="All">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="260"/>
-                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                                <DataGridTextColumn Header="{l:T Insp.Name}" Binding="{Binding Name}" Width="260"/>
+                                <DataGridTextColumn Header="{l:T Insp.Value}" Binding="{Binding Value}" Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>
-                    <TabItem Header="Cookies">
+                    <TabItem Header="{l:T Insp.Cookies}">
                         <DataGrid ItemsSource="{Binding ResponseCookies}" IsReadOnly="True" FontSize="12" GridLinesVisibility="All">
                             <DataGrid.Columns>
-                                <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="200"/>
-                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="*"/>
+                                <DataGridTextColumn Header="{l:T Insp.Name}" Binding="{Binding Name}" Width="200"/>
+                                <DataGridTextColumn Header="{l:T Insp.Value}" Binding="{Binding Value}" Width="*"/>
                             </DataGrid.Columns>
                         </DataGrid>
                     </TabItem>
-                    <TabItem Header="Body">
+                    <TabItem Header="{l:T Insp.Body}">
                         <DockPanel>
                             <!-- Find bar -->
                             <Border DockPanel.Dock="Top" Background="#11FFFFFF" Padding="4">
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="Find:" VerticalAlignment="Center"/>
-                                    <TextBox x:Name="FindBox" Width="260" Watermark="text to find in body"
+                                    <TextBlock Text="{l:T Insp.Find}" VerticalAlignment="Center"/>
+                                    <TextBox x:Name="FindBox" Width="260" Watermark="{l:T Insp.FindPlaceholder}"
                                              KeyDown="FindBox_KeyDown"/>
-                                    <Button Content="Find next" Click="FindNext_Click"/>
+                                    <Button Content="{l:T Filter.FindNext}" Click="FindNext_Click"/>
                                     <TextBlock x:Name="FindStatus" VerticalAlignment="Center" Foreground="#FFB0C4DE"/>
                                 </StackPanel>
                             </Border>
@@ -108,7 +109,7 @@
                             </ScrollViewer>
                         </DockPanel>
                     </TabItem>
-                    <TabItem Header="JSON" IsVisible="{Binding IsJsonResponse}">
+                    <TabItem Header="{l:T Insp.Json}" IsVisible="{Binding IsJsonResponse}">
                         <TreeView ItemsSource="{Binding ResponseJsonTree}" FontSize="12">
                             <TreeView.ItemTemplate>
                                 <TreeDataTemplate ItemsSource="{Binding Children}">
@@ -122,15 +123,15 @@
                             </TreeView.ItemTemplate>
                         </TreeView>
                     </TabItem>
-                    <TabItem Header="Raw">
+                    <TabItem Header="{l:T Insp.Raw}">
                         <TextBox Text="{Binding ResponseRaw, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
                                  TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
                     </TabItem>
-                    <TabItem Header="Hex">
+                    <TabItem Header="{l:T Insp.Hex}">
                         <TextBox Text="{Binding ResponseHex, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
                                  TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
                     </TabItem>
-                    <TabItem Header="Preview">
+                    <TabItem Header="{l:T Insp.Preview}">
                         <ScrollViewer>
                             <Image Source="{Binding ImagePreview}" Stretch="None" HorizontalAlignment="Left" VerticalAlignment="Top"/>
                         </ScrollViewer>
@@ -140,16 +141,16 @@
         </TabItem>
 
         <!-- ===== TIMINGS ===== -->
-        <TabItem Header="Summary">
+        <TabItem Header="{l:T Insp.Summary}">
             <TextBox Text="{Binding SummaryText, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
                      Margin="4" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="13"/>
         </TabItem>
 
-        <TabItem Header="Timings">
+        <TabItem Header="{l:T Insp.Timings}">
             <DockPanel Margin="4">
                 <Border DockPanel.Dock="Top" Padding="6" Background="#11FFFFFF" Margin="0,0,0,6">
                     <StackPanel>
-                        <TextBlock Text="Waterfall" FontWeight="Bold" Margin="0,0,0,6"/>
+                        <TextBlock Text="{l:T Insp.Waterfall}" FontWeight="Bold" Margin="0,0,0,6"/>
                         <ItemsControl ItemsSource="{Binding TimingBars}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
@@ -174,38 +175,38 @@
         </TabItem>
 
         <!-- ===== WEBSOCKET ===== -->
-        <TabItem Header="WebSocket" IsVisible="{Binding IsWebSocket}">
+        <TabItem Header="{l:T Insp.WebSocket}" IsVisible="{Binding IsWebSocket}">
             <DataGrid ItemsSource="{Binding WebSocketFrames}" IsReadOnly="True" FontSize="12" GridLinesVisibility="All">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="50"/>
-                    <DataGridTextColumn Header="Dir" Binding="{Binding Direction}" Width="120"/>
-                    <DataGridTextColumn Header="Opcode" Binding="{Binding Opcode}" Width="100"/>
-                    <DataGridTextColumn Header="Len" Binding="{Binding Length}" Width="80"/>
-                    <DataGridTextColumn Header="Payload" Binding="{Binding Summary}" Width="*"/>
+                    <DataGridTextColumn Header="{l:T Insp.Index}" Binding="{Binding Index}" Width="50"/>
+                    <DataGridTextColumn Header="{l:T Insp.Direction}" Binding="{Binding Direction}" Width="120"/>
+                    <DataGridTextColumn Header="{l:T Insp.Opcode}" Binding="{Binding Opcode}" Width="100"/>
+                    <DataGridTextColumn Header="{l:T Insp.Length}" Binding="{Binding Length}" Width="80"/>
+                    <DataGridTextColumn Header="{l:T Insp.Payload}" Binding="{Binding Summary}" Width="*"/>
                 </DataGrid.Columns>
             </DataGrid>
         </TabItem>
 
         <!-- ===== SSE ===== -->
-        <TabItem Header="SSE" IsVisible="{Binding IsSse}">
+        <TabItem Header="{l:T Insp.Sse}" IsVisible="{Binding IsSse}">
             <DataGrid ItemsSource="{Binding ServerSentEvents}" IsReadOnly="True" FontSize="12" GridLinesVisibility="All">
                 <DataGrid.Columns>
-                    <DataGridTextColumn Header="#" Binding="{Binding Index}" Width="50"/>
-                    <DataGridTextColumn Header="Event" Binding="{Binding EventName}" Width="140"/>
-                    <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="100"/>
-                    <DataGridTextColumn Header="Data" Binding="{Binding Data}" Width="*"/>
+                    <DataGridTextColumn Header="{l:T Insp.Index}" Binding="{Binding Index}" Width="50"/>
+                    <DataGridTextColumn Header="{l:T Insp.Event}" Binding="{Binding EventName}" Width="140"/>
+                    <DataGridTextColumn Header="{l:T Insp.Id}" Binding="{Binding Id}" Width="100"/>
+                    <DataGridTextColumn Header="{l:T Insp.Data}" Binding="{Binding Data}" Width="*"/>
                 </DataGrid.Columns>
             </DataGrid>
         </TabItem>
 
         <!-- ===== gRPC ===== -->
-        <TabItem Header="gRPC" IsVisible="{Binding IsGrpc}">
+        <TabItem Header="{l:T Insp.Grpc}" IsVisible="{Binding IsGrpc}">
             <Grid RowDefinitions="Auto,*,Auto,*">
-                <TextBlock Grid.Row="0" Text="Request messages (protobuf)" FontWeight="Bold" Margin="4"/>
+                <TextBlock Grid.Row="0" Text="{l:T Insp.GrpcRequests}" FontWeight="Bold" Margin="4"/>
                 <TextBox Grid.Row="1" Text="{Binding GrpcRequestText, Mode=OneWay}" IsReadOnly="True"
                          AcceptsReturn="True" TextWrapping="NoWrap"
                          FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
-                <TextBlock Grid.Row="2" Text="Response messages (protobuf)" FontWeight="Bold" Margin="4"/>
+                <TextBlock Grid.Row="2" Text="{l:T Insp.GrpcResponses}" FontWeight="Bold" Margin="4"/>
                 <TextBox Grid.Row="3" Text="{Binding GrpcResponseText, Mode=OneWay}" IsReadOnly="True"
                          AcceptsReturn="True" TextWrapping="NoWrap"
                          FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
@@ -213,10 +214,10 @@
         </TabItem>
 
         <!-- ===== CODE GEN ===== -->
-        <TabItem Header="Code">
+        <TabItem Header="{l:T Insp.Code}">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="4">
-                    <TextBlock Text="Language:" VerticalAlignment="Center"/>
+                    <TextBlock Text="{l:T Insp.Language}" VerticalAlignment="Center"/>
                     <ComboBox ItemsSource="{Binding CodeLanguages}" SelectedIndex="{Binding SelectedCodeLanguageIndex}" MinWidth="160"/>
                 </StackPanel>
                 <TextBox Text="{Binding GeneratedCode, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"

@@ -1,4 +1,6 @@
+using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using HttpSpy.App.Converters;
 using HttpSpy.Core.Models;
 
 namespace HttpSpy.App.ViewModels;
@@ -9,6 +11,36 @@ public sealed class SessionViewModel : ObservableObject
     public SessionViewModel(HttpSession model) => Model = model;
 
     public HttpSession Model { get; }
+
+    /// <summary>
+    /// Fades out shortly after the row arrives. During a live capture rows scroll
+    /// past faster than the eye can follow; a brief tint is what makes "this one
+    /// just landed" legible without stopping the capture.
+    /// </summary>
+    private bool _isNew;
+
+    public bool IsNew
+    {
+        get => _isNew;
+        set
+        {
+            if (_isNew == value) return;
+            _isNew = value;
+            OnPropertyChanged(nameof(IsNew));
+            OnPropertyChanged(nameof(RowBackground));
+        }
+    }
+
+    /// <summary>
+    /// The row fill: the arrival tint while it lasts, then whatever the
+    /// highlight rules say. One property rather than two layers, because a
+    /// DataGridRow has a single background to give.
+    /// </summary>
+    public IBrush RowBackground => IsNew
+        ? Palette.ArrivalTint
+        : (IBrush?)HighlightToBrushConverter.Instance.Convert(
+              HighlightColor, typeof(IBrush), null, System.Globalization.CultureInfo.InvariantCulture)
+          ?? Palette.Transparent;
 
     public int Index => Model.Index;
     public string Method => Model.Method;
@@ -109,6 +141,7 @@ public sealed class SessionViewModel : ObservableObject
         OnPropertyChanged(nameof(Kind));
         OnPropertyChanged(nameof(SchemeGlyph));
         OnPropertyChanged(nameof(HighlightColor));
+        OnPropertyChanged(nameof(RowBackground));
         OnPropertyChanged(nameof(Bookmarked));
         OnPropertyChanged(nameof(BookmarkGlyph));
         OnPropertyChanged(nameof(Flags));

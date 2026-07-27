@@ -75,6 +75,9 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         UpstreamProxy = string.IsNullOrEmpty(_engine.Options.UpstreamProxyHost)
             ? "" : $"{_engine.Options.UpstreamProxyHost}:{_engine.Options.UpstreamProxyPort}";
         PassthroughHosts = string.Join(Environment.NewLine, _engine.Options.TlsPassthroughHosts);
+        UpstreamProxyUser = _engine.Options.UpstreamProxyUser ?? "";
+        UpstreamProxyPassword = _engine.Options.UpstreamProxyPassword ?? "";
+        ClientCertificates = ClientCertificateBinding.Format(_engine.Options.ClientCertificates);
         AutoScroll = _settings.AutoScroll;
         IsDarkTheme = !string.Equals(_settings.Theme, "Light", StringComparison.OrdinalIgnoreCase);
         ApplyTheme();
@@ -114,7 +117,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // Re-filtering the grid is O(n); doing it per completed transaction made
         // the UI unusable under load. Coalesce into one refresh per interval.
         _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
-        _refreshTimer.Tick += (_, _) => FlushPendingRefresh();
+        _refreshTimer.Tick += (_, _) => { ExpireArrivals(); FlushPendingRefresh(); };
         _refreshTimer.Start();
 
         LoadRules();
@@ -137,6 +140,7 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         // A long capture that dies with the process takes the whole afternoon
         // with it; snapshot it periodically instead. The backing field is set
         // directly because the change handler needs the timer to exist.
+        _compactRows = _settings.CompactRows;
         _autosaveEnabled = _settings.AutosaveEnabled;
         // Clamped: a settings file carrying 0 would give the timer a zero interval
         // and spin a core writing snapshots.
@@ -146,6 +150,41 @@ public sealed partial class MainWindowViewModel : ViewModelBase
         };
         _autosaveTimer.Tick += (_, _) => _ = RunAutosaveAsync();
         if (_settings.AutosaveEnabled) _autosaveTimer.Start();
+    }
+
+    // ---- Grid layout ---------------------------------------------------------
+
+    /// <summary>Denser rows; a debugging session lives in this grid.</summary>
+    [ObservableProperty] private bool _compactRows;
+
+    partial void OnCompactRowsChanged(bool value)
+    {
+        _settings.CompactRows = value;
+        PersistSettings();
+    }
+
+    /// <summary>
+    /// Column order and width as persisted, one <c>tag|index|width</c> entry per
+    /// column. The view owns the grid, so it reads and writes this.
+    /// </summary>
+    public IReadOnlyList<string> SavedColumnLayout => _settings.ColumnLayout;
+
+    /// <summary>Stores the layout the view read off the grid.</summary>
+    public void CaptureColumnLayout(IEnumerable<string> entries)
+    {
+        _settings.ColumnLayout = entries.ToList();
+        PersistSettings();
+    }
+
+    /// <summary>Raised when the user asks for the default column order and widths back.</summary>
+    public event Action? ColumnLayoutResetRequested;
+
+    [RelayCommand]
+    private void ResetColumnLayout()
+    {
+        _settings.ColumnLayout = new List<string>();
+        PersistSettings();
+        ColumnLayoutResetRequested?.Invoke();
     }
 
     // ---- Autosave / crash recovery -------------------------------------------
@@ -348,6 +387,16 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     [ObservableProperty] private int _throttleKbps;
     [ObservableProperty] private int _extraLatencyMs;
     [ObservableProperty] private string _upstreamProxy = "";
+
+    /// <summary>Credentials for a chained proxy that answers 407 without them.</summary>
+    [ObservableProperty] private string _upstreamProxyUser = "";
+    [ObservableProperty] private string _upstreamProxyPassword = "";
+
+    /// <summary>
+    /// Client certificates presented to origins that require mutual TLS, one
+    /// line per binding as <c>hostPattern = path [; password]</c>.
+    /// </summary>
+    [ObservableProperty] private string _clientCertificates = "";
     [ObservableProperty] private string _passthroughHosts = "";
     [ObservableProperty] private bool _autoScroll = true;
     [ObservableProperty] private bool _enableHttp2 = true;
@@ -548,11 +597,12 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     // ---- Engine event handlers (marshaled to UI thread) ----------------------
     private void OnSessionStarted(HttpSession s) => Dispatcher.UIThread.Post(() =>
     {
-        var vm = new SessionViewModel(s);
+        var vm = new SessionViewModel(s) { IsNew = true };
         _index[s.Id] = vm;
         AllSessions.Add(vm);
         TrackQuickFilterValues(vm);
         TrimToSessionLimit();
+        MarkArrival(vm);
         if (AutoScroll) SessionAppended?.Invoke(vm);
     });
 
@@ -572,6 +622,36 @@ public sealed partial class MainWindowViewModel : ViewModelBase
     /// The oldest sessions are dropped first, but never the selected one, the
     /// compare baseline, or anything the user bookmarked.
     /// </summary>
+    // ---- Arrival highlight ---------------------------------------------------
+    //
+    // One shared sweep rather than a timer per row: a busy capture adds hundreds
+    // of rows a second, and hundreds of one-shot timers would cost more than the
+    // effect is worth.
+    private readonly Queue<(SessionViewModel Row, long Stamp)> _arrivals = new();
+
+    /// <summary>How long a freshly arrived row keeps its tint.</summary>
+    private static readonly long ArrivalTicks = System.Diagnostics.Stopwatch.Frequency * 9 / 10;
+
+    private void MarkArrival(SessionViewModel row)
+    {
+        _arrivals.Enqueue((row, System.Diagnostics.Stopwatch.GetTimestamp()));
+
+        // Guard against a burst outrunning the sweep: never let the queue grow
+        // without bound just because nothing has ticked yet.
+        while (_arrivals.Count > 2000 && _arrivals.TryDequeue(out var stale))
+            stale.Row.IsNew = false;
+    }
+
+    private void ExpireArrivals()
+    {
+        long now = System.Diagnostics.Stopwatch.GetTimestamp();
+        while (_arrivals.TryPeek(out var oldest) && now - oldest.Stamp >= ArrivalTicks)
+        {
+            _arrivals.Dequeue();
+            oldest.Row.IsNew = false;
+        }
+    }
+
     private void TrimToSessionLimit()
     {
         if (MaxSessions <= 0 || AllSessions.Count <= MaxSessions) return;
@@ -1838,6 +1918,13 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             _engine.Options.UpstreamProxyHost = null;
         }
 
+        _engine.Options.UpstreamProxyUser = string.IsNullOrWhiteSpace(UpstreamProxyUser) ? null : UpstreamProxyUser.Trim();
+        _engine.Options.UpstreamProxyPassword = UpstreamProxyPassword;
+
+        _engine.Options.ClientCertificates = ClientCertificateBinding.Parse(ClientCertificates);
+        // Files may have been replaced since the last handshake.
+        ClientCertificateStore.Shared.Invalidate();
+
         _engine.Options.TlsPassthroughHosts = PassthroughHosts
             .Split(new[] { '\r', '\n', ',' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .ToList();
@@ -1865,6 +1952,8 @@ public sealed partial class MainWindowViewModel : ViewModelBase
             s.Theme = IsDarkTheme ? "Dark" : "Light";
             s.AutoScroll = AutoScroll;
             s.AutosaveEnabled = AutosaveEnabled;
+            s.CompactRows = CompactRows;
+            s.ColumnLayout = _settings.ColumnLayout;
             s.Language = Loc.ToCode(Loc.Current.Language);
             s.AutosaveIntervalSeconds = _settings.AutosaveIntervalSeconds;
             s.Filters = Filters.Select(f => f.Clone()).ToList();

@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:l="using:HttpSpy.App.Localization"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1000" d:DesignHeight="700"
@@ -12,14 +13,14 @@
         <StackPanel Margin="16" Spacing="18">
             <!-- KPI cards -->
             <WrapPanel>
-                <Border Classes="card"><StackPanel><TextBlock Text="Requests" Classes="kpiLabel"/><TextBlock Text="{Binding Total}" Classes="kpiValue"/></StackPanel></Border>
-                <Border Classes="card"><StackPanel><TextBlock Text="Transferred" Classes="kpiLabel"/><TextBlock Text="{Binding TotalBytes}" Classes="kpiValue"/></StackPanel></Border>
-                <Border Classes="card"><StackPanel><TextBlock Text="Avg time" Classes="kpiLabel"/><TextBlock Text="{Binding AvgDuration}" Classes="kpiValue"/></StackPanel></Border>
-                <Border Classes="card"><StackPanel><TextBlock Text="Errors" Classes="kpiLabel"/><TextBlock Text="{Binding Errors}" Classes="kpiValue"/></StackPanel></Border>
-                <Border Classes="card"><StackPanel><TextBlock Text="HTTPS" Classes="kpiLabel"/><TextBlock Text="{Binding HttpsCount}" Classes="kpiValue"/></StackPanel></Border>
+                <Border Classes="card"><StackPanel><TextBlock Text="{l:T Dash.Requests}" Classes="kpiLabel"/><TextBlock Text="{Binding Total}" Classes="kpiValue"/></StackPanel></Border>
+                <Border Classes="card"><StackPanel><TextBlock Text="{l:T Dash.Transferred}" Classes="kpiLabel"/><TextBlock Text="{Binding TotalBytes}" Classes="kpiValue"/></StackPanel></Border>
+                <Border Classes="card"><StackPanel><TextBlock Text="{l:T Dash.AvgTime}" Classes="kpiLabel"/><TextBlock Text="{Binding AvgDuration}" Classes="kpiValue"/></StackPanel></Border>
+                <Border Classes="card"><StackPanel><TextBlock Text="{l:T Dash.Errors}" Classes="kpiLabel"/><TextBlock Text="{Binding Errors}" Classes="kpiValue"/></StackPanel></Border>
+                <Border Classes="card"><StackPanel><TextBlock Text="{l:T Dash.Https}" Classes="kpiLabel"/><TextBlock Text="{Binding HttpsCount}" Classes="kpiValue"/></StackPanel></Border>
             </WrapPanel>
 
-            <TextBlock Text="Status code distribution" Classes="section"/>
+            <TextBlock Text="{l:T Dash.StatusDistribution}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding StatusDistribution}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -33,7 +34,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Top hosts" Classes="section"/>
+            <TextBlock Text="{l:T Dash.TopHosts}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding TopHosts}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -47,7 +48,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Content types" Classes="section"/>
+            <TextBlock Text="{l:T Dash.ContentTypes}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding ContentTypes}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -61,7 +62,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Methods" Classes="section"/>
+            <TextBlock Text="{l:T Dash.Methods}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding Methods}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -75,7 +76,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Top processes" Classes="section"/>
+            <TextBlock Text="{l:T Dash.TopProcesses}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding TopProcesses}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -89,7 +90,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Heaviest content types (by bytes)" Classes="section"/>
+            <TextBlock Text="{l:T Dash.HeaviestTypes}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding HeaviestTypes}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -103,7 +104,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Heaviest hosts (by bytes)" Classes="section"/>
+            <TextBlock Text="{l:T Dash.HeaviestHosts}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding HeaviestHosts}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -117,7 +118,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Largest individual responses" Classes="section"/>
+            <TextBlock Text="{l:T Dash.LargestResponses}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding LargestRequests}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -132,7 +133,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Slowest individual responses" Classes="section"/>
+            <TextBlock Text="{l:T Dash.SlowestResponses}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding SlowestRequests}">
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
@@ -147,7 +148,7 @@
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
 
-            <TextBlock Text="Requests over time" Classes="section"/>
+            <TextBlock Text="{l:T Dash.OverTime}" Classes="section"/>
             <ItemsControl ItemsSource="{Binding TimeChart}">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -171,9 +172,9 @@
 
     <StackPanel Classes="empty-state"
                 IsVisible="{Binding Total, Converter={StaticResource CountToBool}, ConverterParameter=invert}">
-        <TextBlock Text="◫" Classes="glyph"/>
-        <TextBlock Text="Nothing to chart yet" Classes="title"/>
-        <TextBlock Text="Capture some traffic and the status-code mix, busiest hosts, content types, methods, originating processes and request rate over time all appear here."/>
+        <PathIcon Data="{StaticResource IconChart}" Classes="glyph"/>
+        <TextBlock Text="{l:T Empty.NoChart}" Classes="title"/>
+        <TextBlock Text="{l:T Dash.EmptyHint}"/>
     </StackPanel>
   </Panel>
 </UserControl>

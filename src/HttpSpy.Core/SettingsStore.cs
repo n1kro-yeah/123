@@ -29,6 +29,17 @@ public sealed class HttpSpySettings
     public string? UpstreamProxyHost { get; set; }
     public int UpstreamProxyPort { get; set; }
 
+    /// <summary>
+    /// Credentials for a chained proxy. Stored in plain text, like every other
+    /// setting — the file is restricted to the owner on Unix, but treat it as
+    /// you would any other developer credential on disk.
+    /// </summary>
+    public string? UpstreamProxyUser { get; set; }
+    public string? UpstreamProxyPassword { get; set; }
+
+    /// <summary>Client certificates presented to origins that ask for one.</summary>
+    public List<ClientCertificateBinding> ClientCertificates { get; set; } = new();
+
     public List<string> TlsPassthroughHosts { get; set; } = new();
 
     /// <summary>"Dark" or "Light".</summary>
@@ -46,6 +57,16 @@ public sealed class HttpSpySettings
 
     /// <summary>Seconds between autosave snapshots. Clamped when read back.</summary>
     public int AutosaveIntervalSeconds { get; set; } = 30;
+
+    /// <summary>Denser grid rows, for fitting more of the capture on screen.</summary>
+    public bool CompactRows { get; set; }
+
+    /// <summary>
+    /// Persisted column order and width, one entry per column as
+    /// <c>tag|displayIndex|width</c>. Kept separate from the visibility lists
+    /// because a column can be hidden and still have a remembered position.
+    /// </summary>
+    public List<string> ColumnLayout { get; set; } = new();
 
     /// <summary>Persisted visibility of the optional session-grid columns.</summary>
     public List<string> HiddenColumns { get; set; } = new();
@@ -77,6 +98,9 @@ public sealed class HttpSpySettings
         options.ExtraLatencyMs = ExtraLatencyMs;
         options.UpstreamProxyHost = string.IsNullOrWhiteSpace(UpstreamProxyHost) ? null : UpstreamProxyHost;
         options.UpstreamProxyPort = UpstreamProxyPort;
+        options.UpstreamProxyUser = string.IsNullOrWhiteSpace(UpstreamProxyUser) ? null : UpstreamProxyUser;
+        options.UpstreamProxyPassword = UpstreamProxyPassword;
+        options.ClientCertificates = ClientCertificates.Select(c => c.Clone()).ToList();
         options.TlsPassthroughHosts = new List<string>(TlsPassthroughHosts);
         options.CaptureFilters = CaptureFilters.Select(f => f.Clone()).ToList();
     }
@@ -96,6 +120,9 @@ public sealed class HttpSpySettings
         ExtraLatencyMs = o.ExtraLatencyMs,
         UpstreamProxyHost = o.UpstreamProxyHost,
         UpstreamProxyPort = o.UpstreamProxyPort,
+        UpstreamProxyUser = o.UpstreamProxyUser,
+        UpstreamProxyPassword = o.UpstreamProxyPassword,
+        ClientCertificates = o.ClientCertificates.Select(c => c.Clone()).ToList(),
         TlsPassthroughHosts = new List<string>(o.TlsPassthroughHosts),
         CaptureFilters = o.CaptureFilters.Select(f => f.Clone()).ToList(),
     };
@@ -207,11 +234,24 @@ public static class SettingsStore
     /// option toggle and on shutdown; a crash part-way through a direct write
     /// would leave truncated JSON that the next launch silently discards.
     /// </summary>
+    /// <summary>
+    /// Keeps the settings file owner-readable on Unix. It can hold an upstream
+    /// proxy password and paths to client certificates, so it does not belong in
+    /// a world-readable home directory.
+    /// </summary>
+    private static void RestrictToOwner(string path)
+    {
+        if (OperatingSystem.IsWindows()) return; // inherits the user profile ACL
+        try { File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite); }
+        catch (Exception) { /* a filesystem that cannot express this is not fatal */ }
+    }
+
     private static void WriteAtomic(string path, string contents)
     {
         System.IO.Directory.CreateDirectory(Directory);
         string temp = path + ".tmp";
         File.WriteAllText(temp, contents);
+        RestrictToOwner(temp);
         if (File.Exists(path)) File.Replace(temp, path, destinationBackupFileName: null);
         else File.Move(temp, path);
     }

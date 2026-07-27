@@ -212,7 +212,7 @@
                 <Button Classes="primary" Command="{Binding Analysis.RunAnalysisCommand}"
                         ToolTip.Tip="Scan the capture for security, performance and correctness issues  (Ctrl+Shift+A)">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="⚗"/>
+                        <PathIcon Data="{StaticResource IconFlask}" Width="14" Height="14"/>
                         <TextBlock Text="{l:T Toolbar.Analyse}"/>
                     </StackPanel>
                 </Button>
@@ -240,7 +240,7 @@
 
         <!-- ================= Status bar ================= -->
         <Border DockPanel.Dock="Bottom" Classes="statusbar">
-            <Grid ColumnDefinitions="*,Auto,Auto,Auto">
+            <Grid ColumnDefinitions="2*,Auto,Auto,3*">
                 <TextBlock Grid.Column="0" Text="{Binding StatusText}"
                            TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
 
@@ -254,23 +254,27 @@
                     <NumericUpDown Value="{Binding ListenPort}" Minimum="1" Maximum="65535"
                                    FormatString="0" Width="96" Increment="1" ShowButtonSpinner="False"
                                    FontSize="12" Padding="6,1"
-                                   ToolTip.Tip="TCP port the proxy listens on. Takes effect the next time you start the capture."/>
+                                   ToolTip.Tip="{l:T Status.PortTip}"/>
                 </StackPanel>
 
                 <Border Grid.Column="2" Classes="pill" Margin="12,0,0,0"
-                        ToolTip.Tip="HTTPS decryption only works once the HttpSpy root CA is trusted by the client">
+                        ToolTip.Tip="{l:T Status.CertTip}">
                     <TextBlock Text="{Binding CertStatus}"
                                Classes.success="{Binding IsCertTrusted}"
                                Classes.warning="{Binding !IsCertTrusted}"/>
                 </Border>
 
-                <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="14" VerticalAlignment="Center"
-                            Margin="14,0,0,0">
-                    <TextBlock Text="{Binding AutosaveStatus}" Classes="muted" FontSize="11"
+                <!-- A Grid, not a StackPanel: a horizontal StackPanel measures its
+                     children with unbounded width, so TextTrimming never engages
+                     and the statistics run off the right edge of the window. -->
+                <Grid Grid.Column="3" ColumnDefinitions="Auto,*" VerticalAlignment="Center" Margin="14,0,0,0">
+                    <TextBlock Grid.Column="0" Text="{Binding AutosaveStatus}" Classes="muted" FontSize="11"
+                               TextTrimming="CharacterEllipsis" MaxWidth="220" Margin="0,0,14,0"
                                IsVisible="{Binding AutosaveEnabled}"
-                               ToolTip.Tip="The capture is snapshotted periodically and offered back after an unclean exit"/>
-                    <TextBlock Text="{Binding StatsText}" Classes="mono muted"/>
-                </StackPanel>
+                               ToolTip.Tip="{l:T Status.AutosaveTip}"/>
+                    <TextBlock Grid.Column="1" Text="{Binding StatsText}" Classes="mono muted"
+                               TextAlignment="Right" TextTrimming="CharacterEllipsis"/>
+                </Grid>
             </Grid>
         </Border>
 
@@ -347,6 +351,11 @@
                                                   IsChecked="{Binding SearchBodies, Mode=TwoWay}"/>
                                         <MenuItem Header="Auto-scroll to newest" ToggleType="CheckBox"
                                                   IsChecked="{Binding AutoScroll, Mode=TwoWay}"/>
+                                        <MenuItem Header="{l:T View.CompactRows}" ToggleType="CheckBox"
+                                                  IsChecked="{Binding CompactRows, Mode=TwoWay}"/>
+                                        <Separator/>
+                                        <MenuItem Header="{l:T View.ResetColumns}"
+                                                  Command="{Binding ResetColumnLayoutCommand}"/>
                                         <Separator/>
                                         <MenuItem Header="Group by">
                                             <MenuItem Header="None" Command="{Binding SetGroupByCommand}" CommandParameter="None"/>
@@ -408,15 +417,15 @@
                                       ItemsSource="{Binding SessionsView}"
                                       SelectedItem="{Binding SelectedSession}"
                                       IsReadOnly="True" CanUserResizeColumns="True"
-                                      CanUserSortColumns="True"
+                                      CanUserSortColumns="True" CanUserReorderColumns="True"
+                                      Classes.compact="{Binding CompactRows}"
                                       GridLinesVisibility="Horizontal" SelectionMode="Single">
                                 <DataGrid.Styles>
                                     <!-- Highlight rules paint the row background. This binding is
                                          what makes the whole highlighting feature visible: the
                                          converter existed but was never referenced by any view. -->
                                     <Style Selector="DataGridRow">
-                                        <Setter Property="Background"
-                                                Value="{Binding HighlightColor, Converter={StaticResource HighlightToBrush}}"/>
+                                        <Setter Property="Background" Value="{Binding RowBackground}"/>
                                         <Setter Property="ToolTip.Tip" Value="{Binding RowTooltip}"/>
                                     </Style>
                                 </DataGrid.Styles>
@@ -474,7 +483,7 @@
                                 </DataGrid.ContextMenu>
 
                                 <DataGrid.Columns>
-                                    <DataGridTextColumn Header="{l:T Column.Index}" Tag="#" Binding="{Binding Index}" Width="56"/>
+                                    <DataGridTextColumn Header="{l:T Column.Index}" Tag="#" CellStyleClasses="num" Binding="{Binding Index}" Width="56"/>
 
                                     <!-- Bookmark marker: previously the bookmark flag had no
                                          representation in the grid at all. -->
@@ -514,14 +523,14 @@
                                     <DataGridTextColumn Header="{l:T Column.Host}" Tag="Host" Binding="{Binding Host}" Width="200"/>
                                     <DataGridTextColumn Header="{l:T Column.Url}" Tag="URL" Binding="{Binding PathAndQuery}" Width="*"/>
                                     <DataGridTextColumn Header="{l:T Column.Type}" Tag="Type" Binding="{Binding ContentType}" Width="146"/>
-                                    <DataGridTextColumn Header="{l:T Column.Size}" Tag="Size"
+                                    <DataGridTextColumn Header="{l:T Column.Size}" Tag="Size" CellStyleClasses="num"
                                                         Binding="{Binding Size, Converter={StaticResource ByteSize}}"
                                                         Width="96"/>
-                                    <DataGridTextColumn Header="{l:T Column.Time}" Tag="Time"
+                                    <DataGridTextColumn Header="{l:T Column.Time}" Tag="Time" CellStyleClasses="num"
                                                         Binding="{Binding DurationMs, Converter={StaticResource Duration}}"
                                                         Width="96"/>
                                     <DataGridTextColumn Header="{l:T Column.Process}" Tag="Process" Binding="{Binding ProcessName}" Width="122"/>
-                                    <DataGridTextColumn Header="{l:T Column.Speed}" Tag="Speed" Width="92"
+                                    <DataGridTextColumn Header="{l:T Column.Speed}" Tag="Speed" CellStyleClasses="num" Width="92"
                                                         Binding="{Binding SpeedBytesPerSecond, Converter={StaticResource ByteSize}, StringFormat='{}{0}/s'}"/>
                                     <DataGridTextColumn Header="{l:T Column.Server}" Tag="Server" Binding="{Binding RemoteAddress}" Width="126"/>
                                     <DataGridTextColumn Header="{l:T Column.Connection}" Tag="Conn" Binding="{Binding ConnectionLabel}" Width="76"/>
@@ -531,7 +540,7 @@
                             <!-- Empty state, shown until the first session arrives -->
                             <StackPanel Classes="empty-state" IsHitTestVisible="False"
                                         IsVisible="{Binding !HasSessions}">
-                                <TextBlock Text="◎" Classes="glyph"/>
+                                <PathIcon Data="{StaticResource IconRadar}" Classes="glyph"/>
                                 <TextBlock Text="{l:T Empty.NoTraffic}" Classes="title"/>
                                 <TextBlock Text="{l:T Empty.NoTrafficHint}"/>
                             </StackPanel>
@@ -548,7 +557,7 @@
                                                 IsVisible="{Binding SelectedSession, Converter={x:Static ObjectConverters.IsNotNull}}"/>
                                 <StackPanel Classes="empty-state"
                                             IsVisible="{Binding SelectedSession, Converter={x:Static ObjectConverters.IsNull}}">
-                                    <TextBlock Text="◱" Classes="glyph"/>
+                                    <PathIcon Data="{StaticResource IconPanels}" Classes="glyph"/>
                                     <TextBlock Text="{l:T Empty.NoSelection}" Classes="title"/>
                                     <TextBlock Text="{l:T Empty.NoSelectionHint}"/>
                                 </StackPanel>

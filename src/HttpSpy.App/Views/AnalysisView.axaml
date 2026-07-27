@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:l="using:HttpSpy.App.Localization"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
@@ -16,8 +17,8 @@
                         IsEnabled="{Binding !IsRunning}"
                         ToolTip.Tip="Inspect every captured transaction for security, performance, caching and correctness issues">
                     <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="⚗"/>
-                        <TextBlock Text="Analyse capture"/>
+                        <PathIcon Data="{StaticResource IconFlask}" Width="14" Height="14"/>
+                        <TextBlock Text="{l:T An.Analyse}"/>
                     </StackPanel>
                 </Button>
 
@@ -26,32 +27,44 @@
 
                 <Border Classes="vsep" IsVisible="{Binding HasReport}"/>
 
-                <TextBlock Text="Severity:" VerticalAlignment="Center" Classes="muted"
+                <TextBlock Text="{l:T An.Severity}" VerticalAlignment="Center" Classes="muted"
                            IsVisible="{Binding HasReport}"/>
                 <ComboBox ItemsSource="{Binding SeverityFilters}" SelectedItem="{Binding SeverityFilter}"
-                          MinWidth="110" IsVisible="{Binding HasReport}"/>
+                          MinWidth="130" IsVisible="{Binding HasReport}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource QuickFilterLabel}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
 
-                <TextBlock Text="Category:" VerticalAlignment="Center" Classes="muted"
+                <TextBlock Text="{l:T An.Category}" VerticalAlignment="Center" Classes="muted"
                            IsVisible="{Binding HasReport}"/>
                 <ComboBox ItemsSource="{Binding CategoryFilters}" SelectedItem="{Binding CategoryFilter}"
-                          MinWidth="130" IsVisible="{Binding HasReport}"/>
+                          MinWidth="165" IsVisible="{Binding HasReport}">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Converter={StaticResource QuickFilterLabel}}"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
 
-                <TextBox Text="{Binding SearchText}" Width="200" Watermark="filter findings…"
+                <TextBox Text="{Binding SearchText}" Width="200" Watermark="{l:T An.FilterPlaceholder}"
                          IsVisible="{Binding HasReport}"/>
-                <Button Content="Reset" Classes="ghost" Command="{Binding ClearFiltersCommand}"
+                <Button Content="{l:T An.Reset}" Classes="ghost" Command="{Binding ClearFiltersCommand}"
                         IsVisible="{Binding HasReport}"/>
 
                 <Border Classes="vsep" IsVisible="{Binding HasReport}"/>
 
-                <DropDownButton Content="Export report" IsVisible="{Binding HasReport}">
+                <DropDownButton Content="{l:T An.ExportReport}" IsVisible="{Binding HasReport}">
                     <DropDownButton.Flyout>
                         <MenuFlyout>
-                            <MenuItem Header="HTML report…" Command="{Binding ExportHtmlCommand}"/>
-                            <MenuItem Header="Plain text…" Command="{Binding ExportTextCommand}"/>
-                            <MenuItem Header="JSON (for CI)…" Command="{Binding ExportJsonCommand}"/>
+                            <MenuItem Header="{l:T An.Html}" Command="{Binding ExportHtmlCommand}"/>
+                            <MenuItem Header="{l:T An.Text}" Command="{Binding ExportTextCommand}"/>
+                            <MenuItem Header="{l:T An.Json}" Command="{Binding ExportJsonCommand}"/>
                             <Separator/>
-                            <MenuItem Header="Save as regression baseline…" Command="{Binding SaveBaselineCommand}"/>
-                            <MenuItem Header="Compare against baseline…" Command="{Binding CompareBaselineCommand}"/>
+                            <MenuItem Header="{l:T An.SaveBaseline}" Command="{Binding SaveBaselineCommand}"/>
+                            <MenuItem Header="{l:T An.CompareBaseline}" Command="{Binding CompareBaselineCommand}"/>
                         </MenuFlyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
@@ -65,7 +78,7 @@
                 <!-- Score -->
                 <Border Grid.Column="0" Classes="panel" Padding="18,10" Margin="0,0,16,0">
                     <StackPanel>
-                        <TextBlock Text="Health score" Classes="kpiLabel"/>
+                        <TextBlock Text="{l:T An.Score}" Classes="kpiLabel"/>
                         <StackPanel Orientation="Horizontal" Spacing="2">
                             <TextBlock Text="{Binding OverallScore}" Classes="kpiValue"
                                        Foreground="{Binding OverallScore, Converter={StaticResource ScoreToBrush}}"/>
@@ -79,27 +92,27 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                     <Border Classes="panel" Padding="14,8" MinWidth="86">
                         <StackPanel>
-                            <TextBlock Text="Critical" Classes="kpiLabel"/>
+                            <TextBlock Text="{l:T An.Critical}" Classes="kpiLabel"/>
                             <TextBlock Text="{Binding CriticalCount}" FontSize="22" FontWeight="Bold"
                                        Classes="danger"/>
                         </StackPanel>
                     </Border>
                     <Border Classes="panel" Padding="14,8" MinWidth="86">
                         <StackPanel>
-                            <TextBlock Text="High" Classes="kpiLabel"/>
+                            <TextBlock Text="{l:T An.High}" Classes="kpiLabel"/>
                             <TextBlock Text="{Binding HighCount}" FontSize="22" FontWeight="Bold"
                                        Classes="warning"/>
                         </StackPanel>
                     </Border>
                     <Border Classes="panel" Padding="14,8" MinWidth="86">
                         <StackPanel>
-                            <TextBlock Text="Medium" Classes="kpiLabel"/>
+                            <TextBlock Text="{l:T An.Medium}" Classes="kpiLabel"/>
                             <TextBlock Text="{Binding MediumCount}" FontSize="22" FontWeight="Bold"/>
                         </StackPanel>
                     </Border>
                     <Border Classes="panel" Padding="14,8" MinWidth="86">
                         <StackPanel>
-                            <TextBlock Text="Low / Info" Classes="kpiLabel"/>
+                            <TextBlock Text="{l:T An.LowInfo}" Classes="kpiLabel"/>
                             <StackPanel Orientation="Horizontal" Spacing="4">
                                 <TextBlock Text="{Binding LowCount}" FontSize="22" FontWeight="Bold"/>
                                 <TextBlock Text="/" FontSize="18" Classes="muted" VerticalAlignment="Bottom"/>
@@ -118,7 +131,7 @@
                             <DataTemplate x:DataType="vm:CategoryScoreViewModel">
                                 <Grid ColumnDefinitions="120,Auto,*" Margin="0,2"
                                       ToolTip.Tip="{Binding Breakdown}">
-                                    <TextBlock Grid.Column="0" Text="{Binding Name}" VerticalAlignment="Center"
+                                    <TextBlock Grid.Column="0" Text="{Binding Name, Converter={StaticResource QuickFilterLabel}}" VerticalAlignment="Center"
                                                FontSize="12"/>
                                     <TextBlock Grid.Column="1" Text="{Binding Score}" MinWidth="34"
                                                VerticalAlignment="Center" FontWeight="SemiBold" FontSize="12"
@@ -166,7 +179,7 @@
                                                 <TextBlock Text="{Binding OccurrenceText}"
                                                            Foreground="{DynamicResource SpyTextMutedBrush}"/>
                                             </Border>
-                                            <Button Classes="ghost" Content="Go to session"
+                                            <Button Classes="ghost" Content="{l:T An.GoToSession}"
                                                     FontSize="11"
                                                     Command="{Binding #AnalysisRoot.DataContext.GoToSessionCommand}"
                                                     CommandParameter="{Binding}"
@@ -191,7 +204,7 @@
                                             BorderBrush="{DynamicResource SpySuccessBrush}"
                                             BorderThickness="3,0,0,0" Padding="9,1,0,1">
                                         <TextBlock TextWrapping="Wrap">
-                                            <Run Text="Fix:" FontWeight="SemiBold"/>
+                                            <Run Text="{l:T An.Fix}" FontWeight="SemiBold"/>
                                             <Run Text="{Binding Remediation}"/>
                                         </TextBlock>
                                     </Border>
@@ -213,10 +226,10 @@
             <!-- Empty state: never analysed -->
             <StackPanel Classes="empty-state"
                         IsVisible="{Binding !HasReport}">
-                <TextBlock Text="⚗" Classes="glyph"/>
-                <TextBlock Text="Analyse this capture" Classes="title"/>
-                <TextBlock Text="HttpSpy inspects every captured transaction for missing security headers, leaked credentials, cache mistakes, slow or oversized responses, malformed payloads and N+1 request patterns — then scores the result and tells you how to fix each finding."/>
-                <Button Classes="primary" Content="Run analysis" HorizontalAlignment="Center"
+                <PathIcon Data="{StaticResource IconFlask}" Classes="glyph"/>
+                <TextBlock Text="{l:T An.EmptyTitle}" Classes="title"/>
+                <TextBlock Text="{l:T An.EmptyHint}"/>
+                <Button Classes="primary" Content="{l:T An.Run}" HorizontalAlignment="Center"
                         Command="{Binding RunAnalysisCommand}" IsEnabled="{Binding !IsRunning}"/>
             </StackPanel>
 
@@ -229,9 +242,9 @@
                                  ConverterParameter="invert"/>
                     </MultiBinding>
                 </StackPanel.IsVisible>
-                <TextBlock Text="✓" Classes="glyph"/>
-                <TextBlock Text="Nothing to report" Classes="title"/>
-                <TextBlock Text="No findings match the current filters. Widen the severity or category filter, or capture more traffic and analyse again."/>
+                <PathIcon Data="{StaticResource IconCheck}" Classes="glyph"/>
+                <TextBlock Text="{l:T An.NoneTitle}" Classes="title"/>
+                <TextBlock Text="{l:T An.NoneHint}"/>
             </StackPanel>
         </Panel>
     </DockPanel>

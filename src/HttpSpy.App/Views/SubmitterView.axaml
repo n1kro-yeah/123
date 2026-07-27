@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:l="using:HttpSpy.App.Localization"
              xmlns:ctl="using:HttpSpy.App.Controls"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -12,30 +13,30 @@
         <!-- request line -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
             <ComboBox ItemsSource="{Binding Methods}" SelectedItem="{Binding Method}" MinWidth="110"/>
-            <TextBox Text="{Binding Url}" Width="640" Watermark="https://example.com/api"/>
-            <Button Content="Send" Command="{Binding SendCommand}" IsEnabled="{Binding !IsSending}" MinWidth="80"/>
+            <TextBox Text="{Binding Url}" Width="640" Watermark="{l:T Sub.UrlPlaceholder}"/>
+            <Button Content="{l:T Sub.Send}" Command="{Binding SendCommand}" IsEnabled="{Binding !IsSending}" MinWidth="80"/>
             <TextBlock Text="{Binding ResponseStatus}" VerticalAlignment="Center" FontWeight="Bold"/>
             <TextBlock Text="{Binding Elapsed}" VerticalAlignment="Center" Foreground="#FFB0C4DE"/>
         </StackPanel>
 
         <!-- import from cURL -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-            <TextBlock Text="Import cURL:" VerticalAlignment="Center"/>
+            <TextBlock Text="{l:T Sub.ImportCurl}" VerticalAlignment="Center"/>
             <TextBox Text="{Binding CurlImport}" Width="640"
-                     Watermark="paste a curl command (browser → Copy as cURL)"
+                     Watermark="{l:T Sub.CurlPlaceholder}"
                      ToolTip.Tip="Parses -X/-H/-d/--data/--json/-G/-u and fills the composer"/>
-            <Button Content="Import" Command="{Binding ImportCurlCommand}" MinWidth="80"/>
+            <Button Content="{l:T Sub.Import}" Command="{Binding ImportCurlCommand}" MinWidth="80"/>
         </StackPanel>
 
         <!-- request editor -->
         <Grid Grid.Row="2" ColumnDefinitions="*,8,*">
             <DockPanel Grid.Column="0">
-                <TextBlock DockPanel.Dock="Top" Text="Request headers" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBlock DockPanel.Dock="Top" Text="{l:T Sub.RequestHeaders}" FontWeight="Bold" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding HeadersText}" AcceptsReturn="True" TextWrapping="NoWrap"
                          FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
             </DockPanel>
             <DockPanel Grid.Column="2">
-                <TextBlock DockPanel.Dock="Top" Text="Request body" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBlock DockPanel.Dock="Top" Text="{l:T Sub.RequestBody}" FontWeight="Bold" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding BodyText}" AcceptsReturn="True" TextWrapping="NoWrap"
                          FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
             </DockPanel>
@@ -46,12 +47,12 @@
         <!-- response -->
         <Grid Grid.Row="4" ColumnDefinitions="*,8,2*">
             <DockPanel Grid.Column="0">
-                <TextBlock DockPanel.Dock="Top" Text="Response headers" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBlock DockPanel.Dock="Top" Text="{l:T Sub.ResponseHeaders}" FontWeight="Bold" Margin="0,0,0,4"/>
                 <TextBox Text="{Binding ResponseHeaders, Mode=OneWay}" IsReadOnly="True" AcceptsReturn="True"
                          TextWrapping="NoWrap" FontFamily="Cascadia Mono,Consolas,monospace" FontSize="12"/>
             </DockPanel>
             <DockPanel Grid.Column="2">
-                <TextBlock DockPanel.Dock="Top" Text="Response body" FontWeight="Bold" Margin="0,0,0,4"/>
+                <TextBlock DockPanel.Dock="Top" Text="{l:T Sub.ResponseBody}" FontWeight="Bold" Margin="0,0,0,4"/>
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" Padding="6">
                     <SelectableTextBlock ctl:HighlightBehavior.SourceText="{Binding ResponseBody}"
                                          ctl:HighlightBehavior.Language="{Binding ResponseBodyLanguage}"

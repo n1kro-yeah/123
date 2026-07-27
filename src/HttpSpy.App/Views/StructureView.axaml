@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:HttpSpy.App.ViewModels"
+             xmlns:l="using:HttpSpy.App.Localization"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="700"
@@ -13,8 +14,8 @@
             <WrapPanel Classes="spaced">
                 <ComboBox ItemsSource="{Binding Modes}" SelectedIndex="{Binding ModeIndex}" MinWidth="160"
                           ToolTip.Tip="Site structure folds requests into a host/path tree. Connections shows how they were multiplexed."/>
-                <Button Content="↻ Rebuild" Command="{Binding RebuildCommand}"/>
-                <CheckBox Content="Group ids" IsChecked="{Binding CollapseIdentifiers}"
+                <Button Content="{l:T Struct.Rebuild}" Command="{Binding RebuildCommand}"/>
+                <CheckBox Content="{l:T Struct.GroupIds}" IsChecked="{Binding CollapseIdentifiers}"
                           IsVisible="{Binding IsStructureMode}"
                           ToolTip.Tip="Collapse numeric and UUID path segments, so /users/1 and /users/2 share one node"/>
             </WrapPanel>
@@ -29,15 +30,15 @@
             <DockPanel IsVisible="{Binding IsStructureMode}">
                 <Grid DockPanel.Dock="Top" Classes="chrome" ColumnDefinitions="*,90,100,90,110"
                       Margin="0" Height="26">
-                    <TextBlock Grid.Column="0" Text="Host / path" Classes="muted" Margin="30,0,0,0"
+                    <TextBlock Grid.Column="0" Text="{l:T Struct.HostPath}" Classes="muted" Margin="30,0,0,0"
                                VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="1" Text="Requests" Classes="muted" TextAlignment="Right"
+                    <TextBlock Grid.Column="1" Text="{l:T Struct.Requests}" Classes="muted" TextAlignment="Right"
                                VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="2" Text="Transferred" Classes="muted" TextAlignment="Right"
+                    <TextBlock Grid.Column="2" Text="{l:T Struct.Transferred}" Classes="muted" TextAlignment="Right"
                                VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="3" Text="Average" Classes="muted" TextAlignment="Right"
+                    <TextBlock Grid.Column="3" Text="{l:T Struct.Average}" Classes="muted" TextAlignment="Right"
                                VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="4" Text="Issues" Classes="muted" TextAlignment="Right"
+                    <TextBlock Grid.Column="4" Text="{l:T Struct.Issues}" Classes="muted" TextAlignment="Right"
                                VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" Margin="0,0,10,0"/>
                 </Grid>
 
@@ -88,9 +89,9 @@
 
             <!-- ===== Empty state ===== -->
             <StackPanel Classes="empty-state" IsVisible="{Binding !HasContent}">
-                <TextBlock Text="⑃" Classes="glyph"/>
-                <TextBlock Text="Nothing to lay out yet" Classes="title"/>
-                <TextBlock Text="Capture some traffic and this tab folds it into a host and path tree — with per-branch request counts, transferred bytes, average timing and error tallies — or groups it by the transport connection to show how HTTP/2 multiplexed it."/>
+                <PathIcon Data="{StaticResource IconTree}" Classes="glyph"/>
+                <TextBlock Text="{l:T Struct.EmptyTitle}" Classes="title"/>
+                <TextBlock Text="{l:T Struct.EmptyHint}"/>
             </StackPanel>
         </Panel>
     </DockPanel>

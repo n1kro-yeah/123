@@ -10,6 +10,10 @@
     </Application.DataTemplates>
 
     <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://HttpSpy/Styles/Icons.axaml"/>
+            </ResourceDictionary.MergedDictionaries>
         <conv:HighlightToBrushConverter x:Key="HighlightToBrush"/>
         <conv:StatusToBrushConverter x:Key="StatusToBrush"/>
         <conv:SeverityToBrushConverter x:Key="SeverityToBrush"/>
@@ -21,6 +25,7 @@
         <conv:StringNotEmptyConverter x:Key="StringNotEmpty"/>
         <conv:CountToBoolConverter x:Key="CountToBool"/>
         <conv:LogLineToBrushConverter x:Key="LogLineToBrush"/>
+        </ResourceDictionary>
     </Application.Resources>
 
     <Application.Styles>

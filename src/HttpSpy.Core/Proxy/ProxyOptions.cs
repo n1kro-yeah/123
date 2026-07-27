@@ -66,6 +66,25 @@ public sealed class ProxyOptions
     public string? UpstreamProxyHost { get; set; }
     public int UpstreamProxyPort { get; set; }
 
+    /// <summary>
+    /// Credentials for a chained proxy that requires authentication. Without
+    /// these, a corporate proxy answers 407 and the chain simply fails; only
+    /// Basic is attempted, since NTLM and Negotiate need a handshake this proxy
+    /// has no business impersonating.
+    /// </summary>
+    public string? UpstreamProxyUser { get; set; }
+    public string? UpstreamProxyPassword { get; set; }
+
+    /// <summary>True when a chained proxy is configured with credentials.</summary>
+    public bool HasUpstreamCredentials => !string.IsNullOrEmpty(UpstreamProxyUser);
+
+    /// <summary>
+    /// Client certificates presented to origins that ask for one, keyed by a
+    /// host pattern. Without this, an mTLS-protected API cannot be debugged at
+    /// all: the origin aborts the handshake and nothing reaches the grid.
+    /// </summary>
+    public List<ClientCertificateBinding> ClientCertificates { get; set; } = new();
+
     public int ConnectTimeoutMs { get; set; } = 15000;
 
     /// <summary>

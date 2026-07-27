@@ -234,6 +234,7 @@ internal sealed class Http2Connection
     private async Task ProcessStreamAsync(int streamId, List<HpackHeader> headers, byte[] body, long wireBytes)
     {
         var sw = Stopwatch.StartNew();
+        HttpSession? session = null;
         try
         {
             string method = "GET", path = "/", scheme = "https", authority = _host;
@@ -253,7 +254,7 @@ internal sealed class Http2Connection
             }
 
             var (host, port) = SplitHostPort(authority, _port);
-            var session = BuildSession(method, scheme, host, port, path, requestHeaders, body, streamId, wireBytes);
+            session = BuildSession(method, scheme, host, port, path, requestHeaders, body, streamId, wireBytes);
             _engine.RaiseStarted(session);
 
             var decision = _engine.Rules.EvaluateRequest(session);
@@ -305,6 +306,20 @@ internal sealed class Http2Connection
         catch (Exception ex)
         {
             _engine.RaiseLog($"HTTP/2 stream {streamId} error: {ex.Message}");
+
+            // Without this the row sits at "…" for the rest of the session: the
+            // transaction was announced as started and nothing ever completed it.
+            // An upstream that refuses the connection is exactly when you most
+            // want the grid to say so.
+            if (session is not null)
+            {
+                session.State = SessionState.Faulted;
+                session.Error = ex.Message;
+                session.EndTime = DateTime.Now;
+                session.Timings.TotalMs = sw.Elapsed.TotalMilliseconds;
+                _engine.RaiseCompleted(session);
+            }
+
             try { await _writer.WriteFrameAsync(Http2Frame.RstStream(streamId, Http2ErrorCode.InternalError), _ct).ConfigureAwait(false); }
             catch { /* ignore */ }
         }

@@ -505,9 +505,16 @@ internal sealed class ProxyServer : IDisposable
             // ("GET http://host/path HTTP/1.1"); only the origin server takes the
             // origin-form path. Getting this wrong made upstream-proxy chaining
             // fail for every plain-HTTP request.
-            string requestTarget = _upstream.RequiresAbsoluteForm(scheme == "https")
+            bool viaChain = _upstream.RequiresAbsoluteForm(scheme == "https");
+            string requestTarget = viaChain
                 ? BuildAbsoluteTarget(scheme, host, port, head.Target)
                 : head.Target;
+
+            // A plain-HTTP request handed to a chained proxy carries its
+            // credentials on the request itself; only the CONNECT tunnel gets
+            // them at connect time.
+            if (viaChain && _upstream.ProxyAuthorization() is { } chainAuth)
+                upstreamHeaders.Set("Proxy-Authorization", chainAuth);
 
             var requestBytes = HttpWire.SerializeRequest(head.Method, requestTarget, head.Version,
                 upstreamHeaders, session.RequestBody);

@@ -30,6 +30,18 @@ public sealed class Upstream
     }
 
     /// <summary>
+    /// The <c>Proxy-Authorization</c> value for the chained proxy, or null when
+    /// no credentials are configured. Basic only, and deliberately so: NTLM and
+    /// Negotiate would require this proxy to impersonate the user's session.
+    /// </summary>
+    public string? ProxyAuthorization()
+    {
+        if (!_options.HasUpstreamCredentials) return null;
+        var raw = $"{_options.UpstreamProxyUser}:{_options.UpstreamProxyPassword}";
+        return "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(raw));
+    }
+
+    /// <summary>
     /// True when requests on this connection must use absolute-form request
     /// targets (<c>GET http://host/path</c>) because they are being handed to a
     /// chained forward proxy rather than to the origin server itself.
@@ -54,7 +66,8 @@ public sealed class Upstream
                 // Only TLS needs a tunnel; plain HTTP is forwarded to the chained
                 // proxy using an absolute-form request target instead.
                 if (tls)
-                    await SendConnectAsync(tcp.GetStream(), host, port, timeoutCts.Token).ConfigureAwait(false);
+                    await SendConnectAsync(tcp.GetStream(), host, port, ProxyAuthorization(), timeoutCts.Token)
+                        .ConfigureAwait(false);
             }
             else
             {
@@ -79,6 +92,12 @@ public sealed class Upstream
                 };
                 if (alpnProtocols is not null)
                     options.ApplicationProtocols = alpnProtocols.ToList();
+
+                // An origin that requires mutual TLS aborts the handshake unless
+                // a certificate is offered, so nothing would ever be captured.
+                var clientCert = ClientCertificateStore.Shared.Resolve(_options.ClientCertificates, host);
+                if (clientCert is not null)
+                    options.ClientCertificates = new X509CertificateCollection { clientCert };
                 await ssl.AuthenticateAsClientAsync(options, timeoutCts.Token).ConfigureAwait(false);
                 negotiated = ssl.NegotiatedApplicationProtocol.ToString();
                 stream = ssl;
@@ -102,18 +121,32 @@ public sealed class Upstream
         }
     }
 
-    private static async Task SendConnectAsync(Stream stream, string host, int port, CancellationToken ct)
+    private static async Task SendConnectAsync(Stream stream, string host, int port, string? proxyAuthorization,
+        CancellationToken ct)
     {
-        var req = $"CONNECT {host}:{port} HTTP/1.1\r\nHost: {host}:{port}\r\nProxy-Connection: keep-alive\r\n\r\n";
-        var bytes = Encoding.ASCII.GetBytes(req);
+        var sb = new StringBuilder();
+        sb.Append("CONNECT ").Append(host).Append(':').Append(port).Append(" HTTP/1.1\r\n");
+        sb.Append("Host: ").Append(host).Append(':').Append(port).Append("\r\n");
+        if (proxyAuthorization is not null)
+            sb.Append("Proxy-Authorization: ").Append(proxyAuthorization).Append("\r\n");
+        sb.Append("Proxy-Connection: keep-alive\r\n\r\n");
+
+        var bytes = Encoding.ASCII.GetBytes(sb.ToString());
         await stream.WriteAsync(bytes, ct).ConfigureAwait(false);
 
         // Read the CONNECT response one byte at a time: a buffered reader could
         // swallow bytes belonging to the tunnelled TLS handshake that follows.
         string statusLine = await ReadLineUnbufferedAsync(stream, ct).ConfigureAwait(false);
         var parts = statusLine.Split(' ', 3);
-        if (parts.Length < 2 || !int.TryParse(parts[1], out int status) || status is < 200 or > 299)
-            throw new IOException($"Upstream proxy CONNECT failed: {statusLine}");
+        int status = parts.Length >= 2 && int.TryParse(parts[1], out int parsed) ? parsed : 0;
+        if (status is < 200 or > 299)
+        {
+            // 407 is worth naming: the chain is configured but unauthenticated,
+            // which is a settings problem rather than a network one.
+            throw new IOException(status == 407
+                ? "Upstream proxy requires authentication (407). Set the proxy user and password in Options."
+                : $"Upstream proxy CONNECT failed: {statusLine}");
+        }
 
         while (true)
         {

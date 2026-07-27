@@ -110,8 +110,17 @@ response inspected below.*
 - **Bounded memory for large bodies** — bodies above a threshold are spilled to
   a temporary file and read back on demand, so an overnight capture of large
   responses cannot exhaust the heap. Spill files are released with the session.
-- **English and Russian interface** — switchable at runtime from
+- **English and Russian interface** — every panel, switchable at runtime from
   *Tools ▸ Options ▸ Language*, defaulting to the system language.
+- **A grid built for reading** — numeric columns right-aligned in a monospaced
+  face so sizes and timings line up digit-for-digit, a compact density mode, and
+  column order, width and visibility all remembered between runs. New rows carry
+  a brief tint so a live capture stays followable.
+- **Authenticated upstream proxies** — Basic credentials are sent on both the
+  CONNECT tunnel and absolute-form requests, and a 407 says what to do about it
+  rather than surfacing as a generic connection failure.
+- **Client certificates (mutual TLS)** — presented to origins that ask for one,
+  bound per host pattern, so an mTLS-protected API can be debugged at all.
 - **Persistent settings & rules** — all options, the theme, the language and the
   rule list are saved to `%APPDATA%\HttpSpy\` (`settings.json` + `rules.json`)
   and restored on the next launch.
@@ -254,7 +263,7 @@ tests/
                    # wire/parsing regressions, traffic analyzer, structure and
                    # connection trees, capture filters, throttling, HAR/cURL
                    # import, autosave, search, baselines, body spilling,
-                   # localization) — 330 tests
+                   # localization, proxy auth, mTLS) — 355 tests
 ```
 
 `HttpSpy.Core` has no UI dependency and can be referenced from tests or other
